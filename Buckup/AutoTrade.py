@@ -15,14 +15,12 @@ PROFIT_THRESHOLD = 0.10  # 利確幅（例: 0.1円）
 LOSS_THRESHOLD = 0.10    # 損切り幅（例: 0.1円）
 LOG_FILE = "fx_trade_log.csv"
 CHECK_INTERVAL = 60  # 秒
-MAINTENANCE_MARGIN_RATIO = 0.5  # 証拠金維持率アラート閾値（50%）
 
 # === 環境変数の読み込み ===
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
 API_SECRET = os.getenv("API_SECRET")
 BASE_URL = "https://api.coin.z.com"
-FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
 # === 署名作成 ===
 def create_signature(timestamp, method, path, body=""):
@@ -32,7 +30,7 @@ def create_signature(timestamp, method, path, body=""):
 # === 営業状態チェック ===
 def is_market_open():
     try:
-        response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
+        response = requests.get("https://forex-api.coin.z.com/public/v1/status")
         if response.status_code != 200:
             print(f"[市場] ステータスコード異常: {response.status_code}")
             return False
@@ -64,53 +62,15 @@ def get_positions():
         print(f"[エラー] 建玉取得に失敗しました: {e}")
         return []
 
-# === 現在価格取得（FX用API, ASK価格 + BID価格両方） ===
+# === 現在価格取得 ===
 def get_price():
     try:
-        res = requests.get(f"{FOREX_PUBLIC_API}/v1/ticker")
+        res = requests.get(f"{BASE_URL}/public/v1/ticker?symbol={SYMBOL}")
         res.raise_for_status()
-        data = res.json().get("data", [])
-        for item in data:
-            if item.get("symbol") == SYMBOL:
-                ask = float(item["ask"])
-                bid = float(item["bid"])
-                return {"ask": ask, "bid": bid}
-        print(f"[エラー] 指定シンボル {SYMBOL} が見つかりませんでした。")
-        return None
+        return float(res.json()["data"][0]["last"])
     except Exception as e:
         print(f"[エラー] 現在価格の取得失敗: {e}")
         return None
-
-# === 証拠金維持率取得 ===
-def get_margin_status():
-    path = "/private/v1/account/margin"
-    method = "GET"
-    timestamp = str(int(time.time() * 1000))
-    sign = create_signature(timestamp, method, path)
-
-    headers = {
-        "API-KEY": API_KEY,
-        "API-TIMESTAMP": timestamp,
-        "API-SIGN": sign
-    }
-
-    try:
-        res = requests.get(BASE_URL + path, headers=headers)
-        res.raise_for_status()
-        data = res.json().get("data", {})
-        margin_ratio = float(data.get("marginRatio", 0))
-        print(f"[証拠金維持率] {margin_ratio:.2f}%")
-        if margin_ratio < MAINTENANCE_MARGIN_RATIO * 100:
-            print("[⚠️アラート] 証拠金維持率が危険水準です！")
-    except Exception as e:
-        print(f"[エラー] 証拠金維持率取得失敗: {e}")
-
-# === 損失シミュレーション ===
-def simulate_max_loss():
-    price = get_price()
-    if price:
-        max_loss = LOSS_THRESHOLD * 1000
-        print(f"[シミュレーション] 最大想定損失（1回）: 約{int(max_loss)}円")
 
 # === 成行注文（新規建て） ===
 def open_order():
@@ -179,7 +139,6 @@ def write_log(action, price):
 
 # === メインループ ===
 def auto_trade():
-    simulate_max_loss()
     while True:
         try:
             if not is_market_open():
@@ -187,37 +146,32 @@ def auto_trade():
                 time.sleep(CHECK_INTERVAL)
                 continue
 
-            get_margin_status()
-
             positions = get_positions()
-            prices = get_price()
-            if prices is None:
+            current_price = get_price()
+            if current_price is None:
                 time.sleep(CHECK_INTERVAL)
                 continue
 
-            ask_price = prices["ask"]
-            bid_price = prices["bid"]
-
             if not positions:
-                print(f"[情報] 建玉なし → 新規買い建て実行")
+                print(f"\n[情報] 建玉なし → 新規買い建て実行")
                 open_order()
-                write_log("BUY", ask_price)
+                write_log("BUY", current_price)
             else:
                 for pos in positions:
                     entry_price = float(pos["price"])
                     position_id = pos["positionId"]
                     size = float(pos["size"])
 
-                    print(f"[情報] 建玉: ID={position_id}, 買値={entry_price:.3f}, 現在ASK={ask_price:.3f}, BID={bid_price:.3f}, 数量={size}")
+                    print(f"\n[情報] 建玉: ID={position_id}, 買値={entry_price:.3f}, 現在={current_price:.3f}, 数量={size}")
 
-                    if bid_price >= entry_price + PROFIT_THRESHOLD:
+                    if current_price >= entry_price + PROFIT_THRESHOLD:
                         print("[情報] 利確条件達成 → 決済実行")
                         close_order(position_id, size)
-                        write_log("SELL", bid_price)
-                    elif bid_price <= entry_price - LOSS_THRESHOLD:
+                        write_log("SELL", current_price)
+                    elif current_price <= entry_price - LOSS_THRESHOLD:
                         print("[情報] 損切り条件達成 → 決済実行")
                         close_order(position_id, size)
-                        write_log("LOSS_CUT", bid_price)
+                        write_log("LOSS_CUT", current_price)
                     else:
                         print("[情報] 条件未達 → 継続保有")
 
@@ -228,3 +182,4 @@ def auto_trade():
 
 if __name__ == "__main__":
     auto_trade()
+
