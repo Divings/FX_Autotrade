@@ -5,6 +5,7 @@ import json
 import requests
 import time
 import csv
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -14,8 +15,14 @@ LOT_SIZE = 0.1  # 1ロット = 10,000通貨。0.1は1,000通貨
 PROFIT_THRESHOLD = 0.10  # 利確幅（例: 0.1円）
 LOSS_THRESHOLD = 0.10    # 損切り幅（例: 0.1円）
 LOG_FILE = "fx_trade_log.csv"
+FULL_LOG_FILE = "fx_debug_log.txt"
 CHECK_INTERVAL = 60  # 秒
 MAINTENANCE_MARGIN_RATIO = 0.5  # 証拠金維持率アラート閾値（50%）
+MARKET_STATUS_LOGGED = False  # 初回ログ記録制御用
+
+# === ログの標準出力/エラーをファイルにリダイレクト ===
+sys.stdout = open(FULL_LOG_FILE, "a", buffering=1)
+sys.stderr = sys.stdout
 
 # === 環境変数の読み込み ===
 load_dotenv()
@@ -29,14 +36,18 @@ def create_signature(timestamp, method, path, body=""):
     message = timestamp + method + path + body
     return hmac.new(API_SECRET.encode(), message.encode(), hashlib.sha256).hexdigest()
 
-# === 営業状態チェック ===
+# === 営業状態チェック（初回のみ記録） ===
 def is_market_open():
+    global MARKET_STATUS_LOGGED
     try:
         response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
         if response.status_code != 200:
             print(f"[市場] ステータスコード異常: {response.status_code}")
             return False
         status = response.json().get("status")
+        if not MARKET_STATUS_LOGGED:
+            print(f"[初回記録] 取引所ステータス: {status}")
+            MARKET_STATUS_LOGGED = True
         return status == "OPEN"
     except Exception as e:
         print(f"[エラー] 営業状態取得に失敗しました: {e}")
@@ -64,7 +75,7 @@ def get_positions():
         print(f"[エラー] 建玉取得に失敗しました: {e}")
         return []
 
-# === 現在価格取得（FX用API, ASK価格 + BID価格両方） ===
+# === 現在価格取得（bid / ask 両方取得） ===
 def get_price():
     try:
         res = requests.get(f"{FOREX_PUBLIC_API}/v1/ticker")
@@ -168,7 +179,7 @@ def close_order(position_id, size):
         print(f"[エラー] 決済失敗: {e}")
         return None
 
-# === ログ保存 ===
+# === ログ保存（売買記録） ===
 def write_log(action, price):
     file_exists = os.path.exists(LOG_FILE)
     with open(LOG_FILE, "a", newline="") as csvfile:
@@ -199,7 +210,7 @@ def auto_trade():
             bid_price = prices["bid"]
 
             if not positions:
-                print(f"[情報] 建玉なし → 新規買い建て実行")
+                print(f"\n[情報] 建玉なし → 新規買い建て実行")
                 open_order()
                 write_log("BUY", ask_price)
             else:
@@ -208,7 +219,7 @@ def auto_trade():
                     position_id = pos["positionId"]
                     size = float(pos["size"])
 
-                    print(f"[情報] 建玉: ID={position_id}, 買値={entry_price:.3f}, 現在ASK={ask_price:.3f}, BID={bid_price:.3f}, 数量={size}")
+                    print(f"\n[情報] 建玉: ID={position_id}, 買値={entry_price:.3f}, 現在ASK={ask_price:.3f}, BID={bid_price:.3f}, 数量={size}")
 
                     if bid_price >= entry_price + PROFIT_THRESHOLD:
                         print("[情報] 利確条件達成 → 決済実行")
@@ -226,5 +237,6 @@ def auto_trade():
 
         time.sleep(CHECK_INTERVAL)
 
+# === 実行 ===
 if __name__ == "__main__":
     auto_trade()
