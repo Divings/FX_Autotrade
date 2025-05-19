@@ -163,11 +163,11 @@ def close_order(position_id, size):
     path = "/v1/closeOrder"
     method = "POST"
     timestamp = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
-    body_dict = json.dumps({
+    body_dict = {
         "positionId": position_id,
         "executionType": "MARKET",
         "size": str(size)
-    })
+    }
     body = json.dumps(body_dict, separators=(',', ':'))
     sign = create_signature(timestamp, method, path, body)
 
