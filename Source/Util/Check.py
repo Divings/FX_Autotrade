@@ -1,7 +1,15 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import matplotlib.font_manager as fm
+import warnings
+warnings.filterwarnings("ignore")  # すべての警告を無視
 
+# 日本語フォント設定（Windows/Mac/Linuxに応じて調整）
+# Windows用の日本語フォント設定（Meiryoを直接指定）
+font_path = "C:/Windows/Fonts/meiryo.ttc"
+prop = fm.FontProperties(fname=font_path)
+plt.rcParams['font.family'] = prop.get_name()
 # === CSVファイル読み込み ===
 LOG_FILE = "fx_trade_log.csv"
 
