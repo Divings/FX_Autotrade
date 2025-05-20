@@ -10,8 +10,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # === ログファイルを初期化 ===
-if os.path.exists("fx_debug_log.txt"):
-    os.remove("fx_debug_log.txt")
+#if os.path.exists("fx_debug_log.txt"):
+#    os.remove("fx_debug_log.txt")
 
 # === 初期設定 ===
 SYMBOL = "USD_JPY"
@@ -296,10 +296,12 @@ def auto_trade():
                         logging.info(f"[決済] 利確条件（利益が {profit} 円）→ 決済")                        
                         close_order(pid, size_str, close_side)
                         write_log("SELL", bid)
+                        continue
                     elif profit <= -MAX_LOSS:
                         logging.info(f"[決済] 損切り条件（損失が {profit} 円）→ 決済")
                         close_order(pid, size_str,close_side)
                         write_log("LOSS_CUT", bid)
+                        continue
                     else:
                         logging.info("[保有] 継続")
 
