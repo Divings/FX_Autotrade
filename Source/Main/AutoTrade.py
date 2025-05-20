@@ -8,10 +8,7 @@ import csv
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
-
-# === ログファイルを初期化 ===
-#if os.path.exists("fx_debug_log.txt"):
-#    os.remove("fx_debug_log.txt")
+from slack_notify import notify_slack
 
 # === 初期設定 ===
 SYMBOL = "USD_JPY"
@@ -50,7 +47,7 @@ def is_market_open():
         response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
         response.raise_for_status()
         status = response.json().get("data", {}).get("status")
-        logging.info(f"[市場] ステータス: {status}")
+        notify_slack(f"[市場] ステータス: {status}")
         return status == "OPEN"
     except Exception as e:
         logging.error(f"[市場] 状態取得失敗: {e}")
@@ -116,15 +113,14 @@ def get_margin_status():
         res = requests.get(BASE_URL_FX + path, headers=headers)
         res.raise_for_status()
         data = res.json().get("data", {})
-        logging.info(f"[証拠金レスポンス] {json.dumps(data, indent=2)}")
         ratio_raw = data.get("marginRatio")
         if ratio_raw is None or ratio_raw == 0:
-            logging.info("[証拠金維持率] ポジションが存在しないため未算出です。※現在0またはNone")
+            notify_slack("[証拠金維持率] ポジションが存在しないため未算出です。※現在0またはNone")
         else:
             ratio = float(ratio_raw)
-            logging.info(f"[証拠金維持率] {ratio:.2f}%")
+            notify_slack(f"[証拠金維持率] {ratio:.2f}%")
             if ratio < MAINTENANCE_MARGIN_RATIO * 100:
-                logging.warning("[⚠️アラート] 証拠金維持率が危険水準")
+                notify_slack("[⚠️アラート] 証拠金維持率が危険水準")
     except Exception as e:
         logging.error(f"[証拠金] 取得失敗: {e}")
 
@@ -152,15 +148,14 @@ def open_order(side="BUY"):
 
     try:
         res = requests.post(BASE_URL_FX + path, headers=headers, data=body)
-        logging.info(f"[注文] 新規建て: {res.json()}")
+        notify_slack(f"[注文] 新規建て: {side}")
         return res.json()
     except Exception as e:
-        logging.error(f"[注文] 新規建て失敗: {e}")
+        notify_slack(f"[注文] 新規建て失敗: {e}")
         return None
 
 # === ポジション決済 ===
 def close_order(position_id, size,side):
-    logging.error(f"[TEST] side: {side}")
     path = "/v1/closeOrder"
     method = "POST"
     timestamp = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
@@ -188,10 +183,10 @@ def close_order(position_id, size,side):
 
     try:
         res = requests.post(BASE_URL_FX + path, headers=headers, data=body)
-        logging.info(f"[決済] 成功: {res.json()}")
+        notify_slack(f"[決済] 成功: {side}")
         return res.json()
     except Exception as e:
-        logging.error(f"[決済] 失敗: {e}")
+        notify_slack(f"[決済] 失敗: {e}")
         return None
 
 # === ログ記録 ===
@@ -208,7 +203,7 @@ def detect_trend_by_ma(sample_duration_min=3, interval_sec=5, short_period=5, lo
     prices = []
     sample_count = max(long_period, (sample_duration_min * 60) // interval_sec)
 
-    logging.info(f"[MAトレンド判定] {sample_count}回価格取得（{sample_duration_min}分間）")
+    notify_slack(f"[MAトレンド判定] {sample_count}回価格取得（{sample_duration_min}分間）")
 
     for _ in range(sample_count):
         p = get_price()
@@ -217,13 +212,13 @@ def detect_trend_by_ma(sample_duration_min=3, interval_sec=5, short_period=5, lo
         time.sleep(interval_sec)
 
     if len(prices) < long_period:
-        logging.warning("[MAトレンド判定] サンプル不足 → 判定不能")
+        notify_slack("[MAトレンド判定] サンプル不足 → 判定不能")
         return None
 
     short_ma = sum(prices[-short_period:]) / short_period
     long_ma = sum(prices[-long_period:]) / long_period
 
-    logging.info(f"[MAトレンド判定] 短期MA: {short_ma:.5f}, 長期MA: {long_ma:.5f}")
+    notify_slack(f"[MAトレンド判定] 短期MA: {short_ma:.5f}, 長期MA: {long_ma:.5f}")
 
     diff = short_ma - long_ma
     if abs(diff) < 0.01:
@@ -235,10 +230,10 @@ trend_none_count = 0
 # === メイン処理 ===
 def auto_trade():
     global trend_none_count
+    
     while True:
         try:
-            if not is_market_open():
-                logging.info("[市場] 閉場中 → 待機")
+            if not is_market_open():                
                 time.sleep(CHECK_INTERVAL)
                 continue
 
@@ -246,16 +241,15 @@ def auto_trade():
             positions = get_positions()
             prices = get_price()
             if not positions:
-                # trend = detect_trend(sample_duration_min=2, interval_sec=12)
+                
 
                 trend = detect_trend_by_ma(sample_duration_min=2, interval_sec=5, short_period=6, long_period=13)
                 if trend is None:
                     trend_none_count += 1
-                    logging.warning(f"[トレンド] 判定不能（{trend_none_count}回連続）")
+                    notify_slack(f"[トレンド] 判定不能（{trend_none_count}回連続）")
                     if trend_none_count >= 2:
-                        logging.info("[トレンド] 判定不能が2回 → BUYでエントリー")
-                        trend = "BUY"
-                        trend_none_count = 0
+                        notify_slack("[トレンド] 判定不能 -> 見送り")
+                        continue
                     else:
                         time.sleep(CHECK_INTERVAL)
                         continue
@@ -269,9 +263,9 @@ def auto_trade():
             bid = prices["bid"]
 
             if not positions:
-                logging.info("[建玉] なし → 新規買い")
-                open_order()
-                write_log("BUY", ask)
+                notify_slack(f"[建玉] なし → 新規{trend}")
+                open_order(trend)
+                write_log(trend, ask)
             else:
                 MAX_LOSS = 20
                 MIN_PROFIT = 40
@@ -293,20 +287,20 @@ def auto_trade():
                     profit = round((bid - entry) * LOT_SIZE, 2)  # 実際の損益金額を算出
 
                     if profit >= MIN_PROFIT:
-                        logging.info(f"[決済] 利確条件（利益が {profit} 円）→ 決済")                        
+                        notify_slack(f"[決済] 利確条件（利益が {profit} 円）→ 決済")                        
                         close_order(pid, size_str, close_side)
                         write_log("SELL", bid)
                         continue
                     elif profit <= -MAX_LOSS:
-                        logging.info(f"[決済] 損切り条件（損失が {profit} 円）→ 決済")
+                        notify_slack(f"[決済] 損切り条件（損失が {profit} 円）→ 決済")
                         close_order(pid, size_str,close_side)
                         write_log("LOSS_CUT", bid)
                         continue
                     else:
-                        logging.info("[保有] 継続")
+                        notify_slack(f"[保有] 継続 {profit}円")
 
         except Exception as e:
-            logging.error(f"[例外] 処理失敗: {e}")
+            notify_slack(f"[例外] 処理失敗: {e}")
 
         time.sleep(CHECK_INTERVAL)
 
