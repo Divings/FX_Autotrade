@@ -13,8 +13,9 @@ from slack_notify import notify_slack
 # === 初期設定 ===
 SYMBOL = "USD_JPY"
 LOT_SIZE = 1000  # 1ロット = 10,000通貨
-
-
+MAX_SPREAD = 0.03 # 許容スプレッド
+MAX_LOSS = 20    # ロスカット/損切(円)
+MIN_PROFIT = 40  # 利確(円)
 LOG_FILE = "fx_trade_log.csv"
 CHECK_INTERVAL = 3  # 秒
 MAINTENANCE_MARGIN_RATIO = 0.5  # 証拠金維持率アラート閾値
@@ -242,7 +243,6 @@ def auto_trade():
             prices = get_price()
             if not positions:
                 
-
                 trend = detect_trend_by_ma(sample_duration_min=2, interval_sec=5, short_period=6, long_period=13)
                 if trend is None:
                     trend_none_count += 1
@@ -261,14 +261,17 @@ def auto_trade():
 
             ask = prices["ask"]
             bid = prices["bid"]
-
+            
+            spread = ask - bid
+            if spread > MAX_SPREAD:
+                notify_slack(f"[スプレッド] {spread:.3f}円 → スプレッドが広すぎるため見送り")
+                continue
             if not positions:
                 notify_slack(f"[建玉] なし → 新規{trend}")
                 open_order(trend)
                 write_log(trend, ask)
             else:
-                MAX_LOSS = 20
-                MIN_PROFIT = 40
+                
                 close_side = None
 
                 for pos in positions:
