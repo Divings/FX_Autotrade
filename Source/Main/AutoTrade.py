@@ -13,8 +13,8 @@ from slack_notify import notify_slack
 # === 初期設定 ===
 SYMBOL = "USD_JPY"
 LOT_SIZE = 1000  # 1ロット = 10,000通貨
-PROFIT_THRESHOLD = 0.03  # 利確幅（例: 0.1円）
-LOSS_THRESHOLD = 0.05    # 損切り幅（例: 0.1円）
+
+
 LOG_FILE = "fx_trade_log.csv"
 CHECK_INTERVAL = 3  # 秒
 MAINTENANCE_MARGIN_RATIO = 0.5  # 証拠金維持率アラート閾値
