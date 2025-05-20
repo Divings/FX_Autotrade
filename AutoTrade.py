@@ -19,7 +19,7 @@ LOT_SIZE = 1000  # 1ロット = 10,000通貨
 PROFIT_THRESHOLD = 0.03  # 利確幅（例: 0.1円）
 LOSS_THRESHOLD = 0.05    # 損切り幅（例: 0.1円）
 LOG_FILE = "fx_trade_log.csv"
-CHECK_INTERVAL = 60  # 秒
+CHECK_INTERVAL = 3  # 秒
 MAINTENANCE_MARGIN_RATIO = 0.5  # 証拠金維持率アラート閾値
 
 # === 環境変数の読み込み ===
@@ -159,15 +159,23 @@ def open_order():
         return None
 
 # === ポジション決済 ===
-def close_order(position_id, size):
+def close_order(position_id, size,side):
+    logging.error(f"[TEST] side: {side}")
     path = "/v1/closeOrder"
     method = "POST"
     timestamp = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
     body_dict = {
-        "positionId": position_id,
+        "symbol": SYMBOL,
+        "side": side,
         "executionType": "MARKET",
-        "size": str(size)
+        "settlePosition": [
+            {
+                "positionId": position_id,
+                "size": str(size)  # 通貨単位
+            }
+        ]
     }
+
     body = json.dumps(body_dict, separators=(',', ':'))
     sign = create_signature(timestamp, method, path, body)
 
@@ -195,8 +203,38 @@ def write_log(action, price):
             writer.writerow(["timestamp", "action", "price"])
         writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), action, price])
 
+# === トレンド取得 ===
+def detect_trend_by_ma(sample_duration_min=3, interval_sec=5, short_period=5, long_period=10):
+    prices = []
+    sample_count = max(long_period, (sample_duration_min * 60) // interval_sec)
+
+    logging.info(f"[MAトレンド判定] {sample_count}回価格取得（{sample_duration_min}分間）")
+
+    for _ in range(sample_count):
+        p = get_price()
+        if p:
+            prices.append(p["bid"])
+        time.sleep(interval_sec)
+
+    if len(prices) < long_period:
+        logging.warning("[MAトレンド判定] サンプル不足 → 判定不能")
+        return None
+
+    short_ma = sum(prices[-short_period:]) / short_period
+    long_ma = sum(prices[-long_period:]) / long_period
+
+    logging.info(f"[MAトレンド判定] 短期MA: {short_ma:.5f}, 長期MA: {long_ma:.5f}")
+
+    diff = short_ma - long_ma
+    if abs(diff) < 0.01:
+        return None
+
+    return "BUY" if diff > 0 else "SELL"
+
+trend_none_count = 0
 # === メイン処理 ===
 def auto_trade():
+    global trend_none_count
     while True:
         try:
             if not is_market_open():
@@ -207,7 +245,22 @@ def auto_trade():
             get_margin_status()
             positions = get_positions()
             prices = get_price()
+            if not positions:
+                # trend = detect_trend(sample_duration_min=2, interval_sec=12)
 
+                trend = detect_trend_by_ma(sample_duration_min=2, interval_sec=5, short_period=6, long_period=13)
+                if trend is None:
+                    trend_none_count += 1
+                    logging.warning(f"[トレンド] 判定不能（{trend_none_count}回連続）")
+                    if trend_none_count >= 2:
+                        logging.info("[トレンド] 判定不能が2回 → BUYでエントリー")
+                        trend = "BUY"
+                        trend_none_count = 0
+                    else:
+                        time.sleep(CHECK_INTERVAL)
+                        continue
+            else:
+                trend_none_count = 0  # リセット
             if prices is None:
                 time.sleep(CHECK_INTERVAL)
                 continue
@@ -220,18 +273,32 @@ def auto_trade():
                 open_order()
                 write_log("BUY", ask)
             else:
+                MAX_LOSS = 45
+                MIN_PROFIT = 20
+                close_side = None
+
                 for pos in positions:
                     entry = float(pos["price"])
                     pid = pos["positionId"]
-                    size = float(pos["size"])
+                    size = pos["size"]  # ← 建玉のsizeは「ロット単位の文字列」または float
+                    
+                    size_str = int(size)
+                    
+                    side = pos.get("side", "BUY").upper()  # 建玉方向
+                    
+                    if side == "BUY":
+                        close_side = "SELL" 
+                    else :
+                        close_side = "BUY"
+                    profit = round((bid - entry) * LOT_SIZE, 2)  # 実際の損益金額を算出
 
-                    if bid >= entry + PROFIT_THRESHOLD:
-                        logging.info("[決済] 利確条件 → 決済")
-                        close_order(pid, size)
+                    if profit >= MIN_PROFIT:
+                        logging.info(f"[決済] 利確条件（利益が {profit} 円）→ 決済")                        
+                        close_order(pid, size_str, close_side)
                         write_log("SELL", bid)
-                    elif bid <= entry - LOSS_THRESHOLD:
-                        logging.info("[決済] 損切り条件 → 決済")
-                        close_order(pid, size)
+                    elif profit <= -MAX_LOSS:
+                        logging.info(f"[決済] 損切り条件（損失が {profit} 円）→ 決済")
+                        close_order(pid, size_str,close_side)
                         write_log("LOSS_CUT", bid)
                     else:
                         logging.info("[保有] 継続")
