@@ -129,13 +129,13 @@ def get_margin_status():
         logging.error(f"[証拠金] 取得失敗: {e}")
 
 # === 注文発行 ===
-def open_order():
+def open_order(side="BUY"):
     path = "/v1/order"
     method = "POST"
     timestamp = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
     body_dict = {
     "symbol": SYMBOL,
-    "side": "BUY",
+    "side": side,
     "executionType": "MARKET",
     "size": str(LOT_SIZE),
     "symbolType": "FOREX"
