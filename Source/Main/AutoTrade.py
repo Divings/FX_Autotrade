@@ -249,6 +249,7 @@ def auto_trade():
                     notify_slack(f"[トレンド] 判定不能（{trend_none_count}回連続）")
                     if trend_none_count >= 2:
                         notify_slack("[トレンド] 判定不能 -> 見送り")
+                        trend_none_count = 0
                         continue
                     else:
                         time.sleep(CHECK_INTERVAL)
