@@ -273,8 +273,8 @@ def auto_trade():
                 open_order()
                 write_log("BUY", ask)
             else:
-                MAX_LOSS = 45
-                MIN_PROFIT = 20
+                MAX_LOSS = 20
+                MIN_PROFIT = 40
                 close_side = None
 
                 for pos in positions:
