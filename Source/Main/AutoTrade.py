@@ -10,7 +10,6 @@ from datetime import datetime
 from dotenv import load_dotenv
 from slack_notify import notify_slack
 import asyncio
-from setlog import log_trade_to_db
 
 notify_slack("自動売買システム起動")
 
