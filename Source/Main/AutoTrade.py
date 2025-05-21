@@ -10,6 +10,9 @@ from datetime import datetime
 from dotenv import load_dotenv
 from slack_notify import notify_slack
 import asyncio
+from setlog import log_trade_to_db
+
+notify_slack("自動売買システム起動")
 
 # === 初期設定 ===
 SYMBOL = "USD_JPY"
@@ -30,7 +33,8 @@ shared_state = {
     "margin_alert_sent": False,
     "last_short_ma": None,  # ← これを追加
     "last_long_ma": None ,
-    "last_skip_notice": None  # ← これも追加
+    "last_skip_notice": None,
+    "last_spread":None  # ← これも追加
 }
 
 # === 環境変数の読み込み ===
@@ -106,6 +110,7 @@ async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=
                     notify_slack(f"[MAトレンド判定] → トレンド方向は {trend}")
                     shared_state["last_trend"] = trend
                     shared_state["trend"] = trend
+                    #shared_state["last_skip_notice"] = False
         await asyncio.sleep(interval_sec)
 
 
@@ -331,7 +336,7 @@ async def auto_trade():
     global trend_none_count
     c = 0
 
-    trend_task = asyncio.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=10, shared_state=shared_state))
+    trend_task = asyncio.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     if not is_market_open():
         pass
     try:
@@ -345,11 +350,19 @@ async def auto_trade():
 
             ask = prices["ask"]
             bid = prices["bid"]
-            spread = ask - bid
+            
+            spread = abs(ask - bid) 
+            last_spread = shared_state.get("last_spread")
+            if last_spread is not None and abs(spread - last_spread) < 0.001:
+                continue  # ほぼ変化なし → 通知しない
+
+            shared_state["last_spread"] = spread
 
             if spread > MAX_SPREAD:
                 notify_slack(f"[スプレッド] {spread:.3f}円 → スプレッドが広すぎるため見送り")
-               
+                
+            else:
+                shared_state["last_spread"] = None  # 通常状態に戻したい場合
                 continue
           
             trend = shared_state.get("trend")
