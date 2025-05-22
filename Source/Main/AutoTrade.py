@@ -10,6 +10,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from slack_notify import notify_slack
 import asyncio
+import statistics
 
 notify_slack("自動売買システム起動")
 
@@ -22,6 +23,13 @@ MIN_PROFIT = 40  # 利確(円)
 LOG_FILE = "fx_trade_log.csv"
 CHECK_INTERVAL = 3 # 秒
 MAINTENANCE_MARGIN_RATIO = 0.5  # 証拠金維持率アラート閾値
+
+VOL_THRESHOLD = 0.03  # ボラティリティ判定のしきい値（適宜調整）
+
+def is_high_volatility(prices, threshold=VOL_THRESHOLD):
+    if len(prices) < 5:
+        return False
+    return statistics.stdev(prices[-5:]) > threshold
 
 shared_state = {
     "trend": None,
@@ -64,54 +72,64 @@ def get_price():
         logging.error(f"[価格] 取得失敗: {e}")
         return None
 
+import statistics
+
+VOL_THRESHOLD = 0.03  # ボラティリティのしきい値（初期値）
+
 async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=3, shared_state=None):
     while not stop_event.is_set():
-        # print(shared_state)
         p = get_price()
         if p:
             price_buffer.append(p["bid"])  # 過去データに追加
 
         if len(price_buffer) < long_period:
-                if not shared_state.get("trend_init_notice"):
-                    notify_slack("[MAトレンド判定] データ蓄積中 → 判定保留中")
-                    shared_state["trend_init_notice"] = True
-                    await asyncio.sleep(interval_sec)
-                    continue
+            if not shared_state.get("trend_init_notice"):
+                notify_slack("[MAトレンド判定] データ蓄積中 → 判定保留中")
+                shared_state["trend_init_notice"] = True
+            await asyncio.sleep(interval_sec)
+            continue
+
+        short_ma = sum(list(price_buffer)[-short_period:]) / short_period
+        long_ma = sum(list(price_buffer)[-long_period:]) / long_period
+        prev_short = shared_state.get("last_short_ma")
+        prev_long = shared_state.get("last_long_ma")
+
+        short_ma_diff = abs(short_ma - prev_short) if prev_short is not None else 999
+        long_ma_diff = abs(long_ma - prev_long) if prev_long is not None else 999
+
+        if short_ma_diff > 0.03 or long_ma_diff > 0.03:
+            notify_slack(f"[MAトレンド判定] 短期MA: {short_ma:.5f}, 長期MA: {long_ma:.5f}")
+            shared_state["last_short_ma"] = short_ma
+            shared_state["last_long_ma"] = long_ma
+
+        diff = short_ma - long_ma
+
+        # 1. 通常トレンド判定
+        if abs(diff) >= 0.03:
+            trend = "BUY" if diff > 0 else "SELL"
+            shared_state["trend"] = trend
+            shared_state["last_skip_notice"] = False
+            if shared_state.get("last_trend") != trend:
+                notify_slack(f"[MAトレンド判定] → トレンド方向は {trend}")
+                shared_state["last_trend"] = trend
+
+        # 2. 差が小さいがボラが高い場合にトレンド返す
+        elif len(price_buffer) >= 5 and statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
+            trend = "BUY" if diff > 0 else "SELL"
+            shared_state["trend"] = trend
+            shared_state["last_skip_notice"] = False
+            notify_slack(f"[ボラティリティ判定] 差小だが高ボラ → 強制トレンド方向は {trend}")
+            shared_state["last_trend"] = trend
+
+        # 3. 差が小さく、ボラも低い → 通常スキップ
         else:
-            short_ma = sum(list(price_buffer)[-short_period:]) / short_period
-            long_ma  = sum(list(price_buffer)[-long_period:]) / long_period
-            prev_short = shared_state.get("last_short_ma")
-            prev_long  = shared_state.get("last_long_ma")
+            shared_state["trend"] = None
+            if not shared_state.get("last_skip_notice", False):
+                notify_slack("[MAトレンド判定] 差が小さく方向不明 → スキップ")
+                shared_state["last_skip_notice"] = True
 
-            short_ma_diff = abs(short_ma - prev_short) if prev_short is not None else 999
-            long_ma_diff  = abs(long_ma - prev_long) if prev_long is not None else 999
-            
-            
-            if short_ma_diff > 0.03 or long_ma_diff > 0.03:
-            
-                notify_slack(f"[MAトレンド判定] 短期MA: {short_ma:.5f}, 長期MA: {long_ma:.5f}")
-                shared_state["last_short_ma"] = short_ma
-                shared_state["last_long_ma"] = long_ma
-
-            diff = short_ma - long_ma
-            
-            if abs(diff) < 0.03:
-                shared_state["trend"] = None
-                if not shared_state.get("last_skip_notice", False):
-                    notify_slack("[MAトレンド判定] 差が小さく方向不明 → スキップ")
-                    shared_state["last_skip_notice"] = True
-                    continue
-            else:
-                
-                shared_state["last_skip_notice"] = False
-                trend = "BUY" if diff > 0 else "SELL"
-                shared_state["trend"] = trend
-                if shared_state.get("last_trend") != trend:
-                    notify_slack(f"[MAトレンド判定] → トレンド方向は {trend}")
-                    shared_state["last_trend"] = trend
-                    shared_state["trend"] = trend
-                    #shared_state["last_skip_notice"] = False
         await asyncio.sleep(interval_sec)
+
 
 
 # === ログ設定 ===
