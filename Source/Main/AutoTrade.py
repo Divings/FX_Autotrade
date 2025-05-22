@@ -11,8 +11,18 @@ from dotenv import load_dotenv
 from slack_notify import notify_slack
 import asyncio
 import statistics
+import signal
+from collections import deque
+from state_utils import (
+    save_state,
+    load_state,
+    save_price_buffer,
+    load_price_buffer
+)
 
 notify_slack("自動売買システム起動")
+shared_state = load_state()
+price_buffer = load_price_buffer()
 
 # === 初期設定 ===
 SYMBOL = "USD_JPY"
@@ -30,6 +40,11 @@ def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
         return False
     return statistics.stdev(prices[-5:]) > threshold
+
+def handle_exit(signum, frame):
+    print("SIGTERM 受信 → 状態保存")
+    save_state(shared_state)
+    save_price_buffer(price_buffer)
 
 shared_state = {
     "trend": None,
@@ -52,8 +67,7 @@ BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
 # === トレンド判定関数 ===
-from collections import deque
-
+signal.signal(signal.SIGTERM, handle_exit)
 # monitor_trend() の外で共有してもOK（必要に応じて）
 price_buffer = deque(maxlen=240)  # 12分間保存
 
@@ -98,7 +112,7 @@ async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=
         long_ma_diff = abs(long_ma - prev_long) if prev_long is not None else 999
 
         if short_ma_diff > 0.03 or long_ma_diff > 0.03:
-            notify_slack(f"[MAトレンド判定] 短期MA: {short_ma:.5f}, 長期MA: {long_ma:.5f}")
+            # notify_slack(f"[MAトレンド判定] 短期MA: {short_ma:.5f}, 長期MA: {long_ma:.5f}")
             shared_state["last_short_ma"] = short_ma
             shared_state["last_long_ma"] = long_ma
 
@@ -129,8 +143,6 @@ async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=
                 shared_state["last_skip_notice"] = True
 
         await asyncio.sleep(interval_sec)
-
-
 
 # === ログ設定 ===
 logging.basicConfig(
@@ -315,7 +327,6 @@ stop_event = Event()
 async def auto_trade():
     global trend_none_count
     
-
     trend_task = asyncio.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     if not is_market_open():
         pass
@@ -390,4 +401,8 @@ async def auto_trade():
             notify_slack("[INFO] monitor_trend タスク終了")
 
 if __name__ == "__main__":
-    asyncio.run(auto_trade())
+    try:
+        asyncio.run(auto_trade())
+    except:
+        save_state(shared_state)
+        save_price_buffer(price_buffer)
