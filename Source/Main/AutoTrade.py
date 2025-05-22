@@ -113,8 +113,6 @@ FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
 # monitor_trend() の外で共有してもOK（必要に応じて）
-price_buffer = deque(maxlen=240)  # 12分間保存
-
 
 # === 現在価格取得 ===
 def get_price():
