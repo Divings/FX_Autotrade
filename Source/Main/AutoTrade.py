@@ -66,7 +66,7 @@ def get_price():
 
 async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=3, shared_state=None):
     while not stop_event.is_set():
-        
+        # print(shared_state)
         p = get_price()
         if p:
             price_buffer.append(p["bid"])  # 過去データに追加
