@@ -29,41 +29,6 @@ price_buffer = load_price_buffer()
 
 LOG_FILE = "fx_trade_log.csv"
 
-def is_high_volatility(prices, threshold=VOL_THRESHOLD):
-    if len(prices) < 5:
-        return False
-    return statistics.stdev(prices[-5:]) > threshold
-
-def handle_exit(signum, frame):
-    print("SIGTERM 受信 → 状態保存")
-    save_state(shared_state)
-    save_price_buffer(price_buffer)
-
-shared_state = {
-    "trend": None,
-    "last_trend": None,
-    "trend_init_notice": False,
-    "last_margin_ratio": None,
-    "last_margin_notify": None,
-    "margin_alert_sent": False,
-    "last_short_ma": None,  # ← これを追加
-    "last_long_ma": None ,
-    "last_skip_notice": None,
-    "last_spread":None  # ← これも追加
-}
-
-# === 環境変数の読み込み ===
-load_dotenv()
-API_KEY = os.getenv("API_KEY")
-API_SECRET = os.getenv("API_SECRET")
-BASE_URL_FX = "https://forex-api.coin.z.com/private"
-FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
-
-# === トレンド判定関数 ===
-signal.signal(signal.SIGTERM, handle_exit)
-# monitor_trend() の外で共有してもOK（必要に応じて）
-price_buffer = deque(maxlen=240)  # 12分間保存
-
 DEFAULT_CONFIG = {
     "LOT_SIZE": 1000,
     "MAX_SPREAD": 0.03,
@@ -106,7 +71,7 @@ def load_config_from_mysql():
 
 # === 設定読み込み ===
 config = load_config_from_mysql()
-
+SYMBOL="USD_JPY"
 LOT_SIZE = config["LOT_SIZE"]
 MAX_SPREAD = config["MAX_SPREAD"]
 MAX_LOSS = config["MAX_LOSS"]
@@ -114,6 +79,42 @@ MIN_PROFIT = config["MIN_PROFIT"]
 CHECK_INTERVAL = config["CHECK_INTERVAL"]
 MAINTENANCE_MARGIN_RATIO = config["MAINTENANCE_MARGIN_RATIO"]
 VOL_THRESHOLD = config["VOL_THRESHOLD"]
+
+def is_high_volatility(prices, threshold=VOL_THRESHOLD):
+    if len(prices) < 5:
+        return False
+    return statistics.stdev(prices[-5:]) > threshold
+
+def handle_exit(signum, frame):
+    print("SIGTERM 受信 → 状態保存")
+    save_state(shared_state)
+    save_price_buffer(price_buffer)
+
+shared_state = {
+    "trend": None,
+    "last_trend": None,
+    "trend_init_notice": False,
+    "last_margin_ratio": None,
+    "last_margin_notify": None,
+    "margin_alert_sent": False,
+    "last_short_ma": None,  # ← これを追加
+    "last_long_ma": None ,
+    "last_skip_notice": None,
+    "last_spread":None  # ← これも追加
+}
+
+# === 環境変数の読み込み ===
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
+API_SECRET = os.getenv("API_SECRET")
+BASE_URL_FX = "https://forex-api.coin.z.com/private"
+FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
+
+# === トレンド判定関数 ===
+signal.signal(signal.SIGTERM, handle_exit)
+# monitor_trend() の外で共有してもOK（必要に応じて）
+price_buffer = deque(maxlen=240)  # 12分間保存
+
 
 # === 現在価格取得 ===
 def get_price():
