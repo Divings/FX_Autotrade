@@ -284,11 +284,17 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["last_trend"] = trend
 
         elif len(price_buffer) >= 5 and statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
-            trend = "BUY" if diff > 0 else "SELL"
-            shared_state["trend"] = trend
-            shared_state["last_skip_notice"] = False
-            notify_slack(f"[ボラティリティ判定] 差小だが高ボラ → 強制トレンド方向は {trend}")
-            shared_state["last_trend"] = trend
+            if rsi_state == "neutral" and (adx is None or adx >= 20):
+                trend = "BUY" if diff > 0 else "SELL"
+                shared_state["trend"] = trend
+                shared_state["last_skip_notice"] = False
+                notify_slack(f"[ボラティリティ判定] 差小だが高ボラ → 強制トレンド方向は {trend}")
+                shared_state["last_trend"] = trend
+            else:
+                shared_state["trend"] = None
+                if not shared_state.get("last_skip_notice", False):
+                    notify_slack(f"[ボラティリティ判定] 高ボラだがRSI/ADX条件満たさず → スキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
+                    shared_state["last_skip_notice"] = True
 
         else:
             shared_state["trend"] = None
@@ -297,6 +303,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["last_skip_notice"] = True
 
         await asyncio.sleep(interval_sec)
+
 
 # === ログ設定 ===
 logging.basicConfig(
