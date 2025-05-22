@@ -20,12 +20,34 @@ from state_utils import (
     save_state,
     load_state,
     save_price_buffer,
-    load_price_buffer
+    load_price_buffer,
+    save_adx_buffers,
+    load_adx_buffers
 )
 
+shared_state = {
+    "trend": None,
+    "last_trend": None,
+    "trend_init_notice": False,
+    "last_margin_ratio": None,
+    "last_margin_notify": None,
+    "margin_alert_sent": False,
+    "last_short_ma": None,  # ← これを追加
+    "last_long_ma": None ,
+    "last_skip_notice": None,
+    "last_spread":None,  # ← これも追加
+    "rsi_adx_none_notice":False
+}
+
 notify_slack("自動売買システム起動")
+
+# == 記録済みデータ読み込み ===
 shared_state = load_state()
 price_buffer = load_price_buffer()
+buffers = load_adx_buffers()
+high_buffer = buffers["highs"]
+low_buffer = buffers["lows"]
+close_buffer = buffers["closes"]
 
 LOG_FILE = "fx_trade_log.csv"
 
@@ -68,6 +90,7 @@ def load_config_from_mysql():
     except Exception as e:
         print(f"⚠️ 設定読み込み失敗（MySQL）：{e}")
         return DEFAULT_CONFIG
+
 # == 損益即時監視用タスク==
 async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
     while not stop_event.is_set():
@@ -96,7 +119,6 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
 
         await asyncio.sleep(interval_sec)
 
-
 # === 設定読み込み ===
 config = load_config_from_mysql()
 SYMBOL="USD_JPY"
@@ -117,20 +139,6 @@ def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
     save_state(shared_state)
     save_price_buffer(price_buffer)
-
-shared_state = {
-    "trend": None,
-    "last_trend": None,
-    "trend_init_notice": False,
-    "last_margin_ratio": None,
-    "last_margin_notify": None,
-    "margin_alert_sent": False,
-    "last_short_ma": None,  # ← これを追加
-    "last_long_ma": None ,
-    "last_skip_notice": None,
-    "last_spread":None,  # ← これも追加
-    "rsi_adx_none_notice":False
-}
 
 # === 環境変数の読み込み ===
 load_dotenv()
@@ -587,3 +595,4 @@ if __name__ == "__main__":
     except:
         save_state(shared_state)
         save_price_buffer(price_buffer)
+        save_adx_buffers(high_buffer, low_buffer, close_buffer)

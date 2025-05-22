@@ -7,6 +7,7 @@ from collections import deque
 STATE_FILE = "shared_state.json"
 BUFFER_FILE = "price_buffer.pkl"
 BUFFER_MAXLEN = 240  # 12分相当
+ADX_BUFFER_FILE = "adx_buffer.pkl"
 
 # --- 状態保存 ---
 def save_state(state):
@@ -38,3 +39,39 @@ def load_price_buffer():
             return deque(buffer, maxlen=BUFFER_MAXLEN)
     except:
         return deque(maxlen=BUFFER_MAXLEN)
+
+def save_adx_buffers(highs, lows, closes):
+    data = {
+        "timestamp": datetime.now().isoformat(),
+        "highs": list(highs),
+        "lows": list(lows),
+        "closes": list(closes),
+    }
+    with open(ADX_BUFFER_FILE, "wb") as f:
+        pickle.dump(data, f)
+
+def load_adx_buffers():
+    try:
+        with open(ADX_BUFFER_FILE, "rb") as f:
+            data = pickle.load(f)
+            timestamp = data.get("timestamp")
+            if timestamp:
+                saved_time = datetime.fromisoformat(timestamp)
+                if datetime.now() - saved_time > timedelta(minutes=12):
+                    # 古すぎるデータは無効とする
+                    return {
+                        "highs": deque(maxlen=BUFFER_MAXLEN),
+                        "lows": deque(maxlen=BUFFER_MAXLEN),
+                        "closes": deque(maxlen=BUFFER_MAXLEN),
+                    }
+            return {
+                "highs": deque(data.get("highs", []), maxlen=BUFFER_MAXLEN),
+                "lows": deque(data.get("lows", []), maxlen=BUFFER_MAXLEN),
+                "closes": deque(data.get("closes", []), maxlen=BUFFER_MAXLEN),
+            }
+    except:
+        return {
+            "highs": deque(maxlen=BUFFER_MAXLEN),
+            "lows": deque(maxlen=BUFFER_MAXLEN),
+            "closes": deque(maxlen=BUFFER_MAXLEN),
+        }
