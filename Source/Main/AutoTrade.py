@@ -556,10 +556,12 @@ async def auto_trade():
                         notify_slack(f"[決済] 利確条件（利益が {profit} 円）→ 決済")
                         close_order(pid, size_str, close_side)
                         write_log("SELL", bid)
+                        trend=None
                     elif profit <= -MAX_LOSS:
                         notify_slack(f"[決済] 損切り条件（損失が {profit} 円）→ 決済")
                         close_order(pid, size_str, close_side)
                         write_log("LOSS_CUT", bid)
+                        trend=None
                     else:
                         if abs(profit) > 10:
                             notify_slack(f"[保有] 継続 {profit}円")
