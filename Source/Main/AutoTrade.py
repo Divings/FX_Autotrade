@@ -68,6 +68,34 @@ def load_config_from_mysql():
     except Exception as e:
         print(f"⚠️ 設定読み込み失敗（MySQL）：{e}")
         return DEFAULT_CONFIG
+# == 損益即時監視用タスク==
+async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
+    while not stop_event.is_set():
+        positions = get_positions()
+        prices = get_price()
+        if prices is None:
+            await asyncio.sleep(interval_sec)
+            continue
+
+        ask = prices["ask"]
+        bid = prices["bid"]
+
+        for pos in positions:
+            entry = float(pos["price"])
+            pid = pos["positionId"]
+            size_str = int(pos["size"])
+            side = pos.get("side", "BUY").upper()
+            close_side = "SELL" if side == "BUY" else "BUY"
+
+            profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
+
+            if profit <= -MAX_LOSS:
+                notify_slack(f"[即時損切] 損失が {profit} 円 → 強制決済実行")
+                close_order(pid, size_str, close_side)
+                write_log("LOSS_CUT_FAST", bid)
+
+        await asyncio.sleep(interval_sec)
+
 
 # === 設定読み込み ===
 config = load_config_from_mysql()
@@ -403,6 +431,7 @@ async def auto_trade():
     global trend_none_count
     
     trend_task = asyncio.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
+    loss_cut_task = asyncio.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     if not is_market_open():
         pass
     try:
@@ -470,11 +499,16 @@ async def auto_trade():
     finally:
         stop_event.set()
         trend_task.cancel()
+        loss_cut_task.cancel()
         try:
             await trend_task
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_trend タスク終了")
-
+        try:
+            await loss_cut_task
+        except asyncio.CancelledError:
+            notify_slack("[INFO] monitor_positions_fast タスク終了")
+            
 if __name__ == "__main__":
     try:
         asyncio.run(auto_trade())
