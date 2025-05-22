@@ -48,6 +48,7 @@ from collections import deque
 
 # monitor_trend() の外で共有してもOK（必要に応じて）
 price_buffer = deque(maxlen=240)  # 12分間保存
+
 # === 現在価格取得 ===
 def get_price():
     try:
@@ -65,7 +66,7 @@ def get_price():
 
 async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=3, shared_state=None):
     while not stop_event.is_set():
-        # print(shared_state)
+        
         p = get_price()
         if p:
             price_buffer.append(p["bid"])  # 過去データに追加
@@ -287,44 +288,6 @@ def write_log(action, price):
             writer.writerow(["timestamp", "action", "price"])
         writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), action, price])
 
-# === トレンド取得 ===
-def detect_trend_by_ma(
-    sample_duration_min=3, interval_sec=5, short_period=5, long_period=10,
-    last_trend_holder={"trend": None}
-):
-    prices = []
-    sample_count = max(long_period, (sample_duration_min * 60) // interval_sec)
-
-    # 通知省略: 毎回通知せず、ログファイルやprintなどに変更してもOK
-    # print(f"[MA判定] {sample_count}回価格取得中（{sample_duration_min}分間）")
-
-    for _ in range(sample_count):
-        p = get_price()
-        if p:
-            prices.append(p["bid"])
-        time.sleep(interval_sec)
-
-    if len(prices) < long_period:
-        notify_slack("[MA判定] サンプル不足 → 判定不能")
-        return None
-
-    short_ma = sum(prices[-short_period:]) / short_period
-    long_ma  = sum(prices[-long_period:]) / long_period
-
-    # 通知は変化時だけに限定
-    diff = short_ma - long_ma
-    if abs(diff) < 0.01:
-        return None
-
-    current_trend = "BUY" if diff > 0 else "SELL"
-
-    if last_trend_holder["trend"] != current_trend:
-        notify_slack(f"[MAトレンド判定] → トレンド変化: {last_trend_holder['trend']} → {current_trend}")
-        last_trend_holder["trend"] = current_trend
-
-    return current_trend
-
-
 from threading import Event
 trend_none_count = 0
 # === メイン処理 ===
@@ -333,7 +296,7 @@ stop_event = Event()
 # メイン取引処理
 async def auto_trade():
     global trend_none_count
-    c = 0
+    
 
     trend_task = asyncio.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     if not is_market_open():
@@ -352,18 +315,14 @@ async def auto_trade():
             
             spread = abs(ask - bid) 
             last_spread = shared_state.get("last_spread")
-            if last_spread is not None and abs(spread - last_spread) < 0.001:
-                continue  # ほぼ変化なし → 通知しない
-
-            shared_state["last_spread"] = spread
-
+            
             if spread > MAX_SPREAD:
-                notify_slack(f"[スプレッド] {spread:.3f}円 → スプレッドが広すぎるため見送り")
-                
+                if last_spread is None or abs(spread - last_spread) >= 0.001 :
+                    notify_slack(f"[スプレッド] {spread:.3f}円 → スプレッドが広すぎるため見送り")
+                    shared_state["last_spread"] = spread
             else:
                 shared_state["last_spread"] = None  # 通常状態に戻したい場合
-                continue
-          
+
             trend = shared_state.get("trend")
             
             if not positions:
