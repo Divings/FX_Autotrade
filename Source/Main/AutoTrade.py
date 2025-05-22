@@ -173,14 +173,56 @@ def calculate_rsi(prices, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi.iloc[-1]
 
-# === トレンド判定を拡張（RSI込み） ===
+# === ADXを計算 ===
+def calculate_adx(highs, lows, closes, period=14):
+    if len(highs) < period + 1:
+        return None
+
+    highs = pd.Series(highs)
+    lows = pd.Series(lows)
+    closes = pd.Series(closes)
+
+    plus_dm = highs.diff()
+    minus_dm = lows.diff()
+
+    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0.0)
+    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0.0)
+
+    tr1 = highs - lows
+    tr2 = (highs - closes.shift()).abs()
+    tr3 = (lows - closes.shift()).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    atr = tr.rolling(window=period).mean()
+    plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr)
+    minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr)
+    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
+    adx = dx.rolling(window=period).mean()
+
+    return adx.iloc[-1]
+
+# === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     last_rsi_state = None  # rsiの状態を追跡
+    last_adx_state = None  # adx状態の変化通知
+
+    high_prices = []
+    low_prices = []
+    close_prices = []
 
     while not stop_event.is_set():
         p = get_price()
         if p:
             price_buffer.append(p["bid"])
+            high_prices.append(p["ask"])
+            low_prices.append(p["bid"])
+            close_prices.append((p["ask"] + p["bid"]) / 2)
+
+            # 保持長さ制限（最大240）
+            if len(high_prices) > 240:
+                high_prices.pop(0)
+                low_prices.pop(0)
+                close_prices.pop(0)
 
         if len(price_buffer) < long_period:
             if not shared_state.get("trend_init_notice"):
@@ -203,6 +245,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         diff = short_ma - long_ma
         rsi = calculate_rsi(list(price_buffer), period=14)
+        adx = calculate_adx(high_prices, low_prices, close_prices, period=14)
 
         rsi_state = None
         if rsi is not None:
@@ -223,13 +266,21 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 notify_slack(f"[RSI] 売られすぎ (RSI={rsi:.2f}) → スキップ")
             last_rsi_state = rsi_state
 
-        # MAトレンドとRSIによる判断
-        if abs(diff) >= 0.03 and rsi_state == "neutral":
+        # ADXによるトレンド制限の通知（変化があったときのみ）
+        if adx is not None and adx < 20:
+            if last_adx_state != "weak":
+                notify_slack(f"[ADX] トレンドが弱いため抑制中 (ADX={adx:.2f})")
+                last_adx_state = "weak"
+        elif adx is not None and adx >= 20:
+            last_adx_state = "strong"
+
+        # MAトレンドとRSIとADXによる判断
+        if abs(diff) >= 0.03 and rsi_state == "neutral" and (adx is None or adx >= 20):
             trend = "BUY" if diff > 0 else "SELL"
             shared_state["trend"] = trend
             shared_state["last_skip_notice"] = False
             if shared_state.get("last_trend") != trend:
-                notify_slack(f"[MA+RSIトレンド] → トレンド方向は {trend} (RSI={rsi:.2f})")
+                notify_slack(f"[MA+RSI+ADXトレンド] → トレンド方向は {trend} (RSI={rsi:.2f}, ADX={adx:.2f})")
                 shared_state["last_trend"] = trend
 
         elif len(price_buffer) >= 5 and statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
