@@ -128,7 +128,8 @@ shared_state = {
     "last_short_ma": None,  # ← これを追加
     "last_long_ma": None ,
     "last_skip_notice": None,
-    "last_spread":None  # ← これも追加
+    "last_spread":None,  # ← これも追加
+    "rsi_adx_none_notice":False
 }
 
 # === 環境変数の読み込み ===
@@ -246,6 +247,17 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         diff = short_ma - long_ma
         rsi = calculate_rsi(list(price_buffer), period=14)
         adx = calculate_adx(high_prices, low_prices, close_prices, period=14)
+        
+        # --- RSI / ADX が未計算の場合はスキップ ---
+        if rsi is None or adx is None:
+            shared_state["trend"] = None
+            if not shared_state.get("rsi_adx_none_notice", False):
+                notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
+                shared_state["rsi_adx_none_notice"] = True
+            await asyncio.sleep(interval_sec)
+            continue
+        else:
+            shared_state["rsi_adx_none_notice"] = False
 
         rsi_state = None
         if rsi is not None:
