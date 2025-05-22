@@ -11,8 +11,11 @@ from dotenv import load_dotenv
 from slack_notify import notify_slack
 import asyncio
 import statistics
+import pandas as pd
+import statistics
 import signal
 from collections import deque
+import mysql.connector
 from state_utils import (
     save_state,
     load_state,
@@ -24,17 +27,7 @@ notify_slack("自動売買システム起動")
 shared_state = load_state()
 price_buffer = load_price_buffer()
 
-# === 初期設定 ===
-SYMBOL = "USD_JPY"
-LOT_SIZE = 1000  # 1ロット = 10,000通貨
-MAX_SPREAD = 0.03 # 許容スプレッド
-MAX_LOSS = 20    # ロスカット/損切(円)
-MIN_PROFIT = 40  # 利確(円)
 LOG_FILE = "fx_trade_log.csv"
-CHECK_INTERVAL = 3 # 秒
-MAINTENANCE_MARGIN_RATIO = 0.5  # 証拠金維持率アラート閾値
-
-VOL_THRESHOLD = 0.03  # ボラティリティ判定のしきい値（適宜調整）
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
@@ -71,6 +64,57 @@ signal.signal(signal.SIGTERM, handle_exit)
 # monitor_trend() の外で共有してもOK（必要に応じて）
 price_buffer = deque(maxlen=240)  # 12分間保存
 
+DEFAULT_CONFIG = {
+    "LOT_SIZE": 1000,
+    "MAX_SPREAD": 0.03,
+    "MAX_LOSS": 20,
+    "MIN_PROFIT": 40,
+    "CHECK_INTERVAL": 3,
+    "MAINTENANCE_MARGIN_RATIO": 0.5,
+    "VOL_THRESHOLD": 0.03
+}
+
+def load_config_from_mysql():
+    try:
+        conn = mysql.connector.connect(
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASS"),
+            database=os.getenv("DB_NAME")
+        )
+        cursor = conn.cursor()
+        cursor.execute("SELECT `key`, `value` FROM bot_config")
+        rows = cursor.fetchall()
+        config = DEFAULT_CONFIG.copy()
+        for key, value in rows:
+            if key in config:
+                # 自動型変換
+                try:
+                    if '.' in value:
+                        config[key] = float(value)
+                    else:
+                        config[key] = int(value)
+                except:
+                    pass
+        cursor.close()
+        conn.close()
+        return config
+    except Exception as e:
+        print(f"⚠️ 設定読み込み失敗（MySQL）：{e}")
+        return DEFAULT_CONFIG
+
+# === 設定読み込み ===
+config = load_config_from_mysql()
+
+LOT_SIZE = config["LOT_SIZE"]
+MAX_SPREAD = config["MAX_SPREAD"]
+MAX_LOSS = config["MAX_LOSS"]
+MIN_PROFIT = config["MIN_PROFIT"]
+CHECK_INTERVAL = config["CHECK_INTERVAL"]
+MAINTENANCE_MARGIN_RATIO = config["MAINTENANCE_MARGIN_RATIO"]
+VOL_THRESHOLD = config["VOL_THRESHOLD"]
+
 # === 現在価格取得 ===
 def get_price():
     try:
@@ -86,15 +130,30 @@ def get_price():
         logging.error(f"[価格] 取得失敗: {e}")
         return None
 
-import statistics
+# === RSIを計算 ===
+def calculate_rsi(prices, period=14):
+    if len(prices) < period + 1:
+        return None
+    prices_series = pd.Series(prices)
+    delta = prices_series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
 
-VOL_THRESHOLD = 0.03  # ボラティリティのしきい値（初期値）
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
 
-async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=3, shared_state=None):
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.iloc[-1]
+
+# === トレンド判定を拡張（RSI込み） ===
+async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
+    last_rsi_state = None  # rsiの状態を追跡
+
     while not stop_event.is_set():
         p = get_price()
         if p:
-            price_buffer.append(p["bid"])  # 過去データに追加
+            price_buffer.append(p["bid"])
 
         if len(price_buffer) < long_period:
             if not shared_state.get("trend_init_notice"):
@@ -112,22 +171,40 @@ async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=
         long_ma_diff = abs(long_ma - prev_long) if prev_long is not None else 999
 
         if short_ma_diff > 0.03 or long_ma_diff > 0.03:
-            # notify_slack(f"[MAトレンド判定] 短期MA: {short_ma:.5f}, 長期MA: {long_ma:.5f}")
             shared_state["last_short_ma"] = short_ma
             shared_state["last_long_ma"] = long_ma
 
         diff = short_ma - long_ma
+        rsi = calculate_rsi(list(price_buffer), period=14)
 
-        # 1. 通常トレンド判定
-        if abs(diff) >= 0.03:
+        rsi_state = None
+        if rsi is not None:
+            if rsi >= 70:
+                rsi_state = "overbought"
+            elif rsi <= 30:
+                rsi_state = "oversold"
+            else:
+                rsi_state = "neutral"
+
+        # RSIの状態に変化があった場合のみ通知
+        if rsi_state != last_rsi_state:
+            if rsi_state == "overbought":
+                shared_state["trend"] = None
+                notify_slack(f"[RSI] 買われすぎ (RSI={rsi:.2f}) → スキップ")
+            elif rsi_state == "oversold":
+                shared_state["trend"] = None
+                notify_slack(f"[RSI] 売られすぎ (RSI={rsi:.2f}) → スキップ")
+            last_rsi_state = rsi_state
+
+        # MAトレンドとRSIによる判断
+        if abs(diff) >= 0.03 and rsi_state == "neutral":
             trend = "BUY" if diff > 0 else "SELL"
             shared_state["trend"] = trend
             shared_state["last_skip_notice"] = False
             if shared_state.get("last_trend") != trend:
-                notify_slack(f"[MAトレンド判定] → トレンド方向は {trend}")
+                notify_slack(f"[MA+RSIトレンド] → トレンド方向は {trend} (RSI={rsi:.2f})")
                 shared_state["last_trend"] = trend
 
-        # 2. 差が小さいがボラが高い場合にトレンド返す
         elif len(price_buffer) >= 5 and statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
             trend = "BUY" if diff > 0 else "SELL"
             shared_state["trend"] = trend
@@ -135,7 +212,6 @@ async def monitor_trend(stop_event, short_period=3, long_period=5, interval_sec=
             notify_slack(f"[ボラティリティ判定] 差小だが高ボラ → 強制トレンド方向は {trend}")
             shared_state["last_trend"] = trend
 
-        # 3. 差が小さく、ボラも低い → 通常スキップ
         else:
             shared_state["trend"] = None
             if not shared_state.get("last_skip_notice", False):
