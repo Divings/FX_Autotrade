@@ -44,10 +44,6 @@ notify_slack("自動売買システム起動")
 # == 記録済みデータ読み込み ===
 shared_state = load_state()
 price_buffer = load_price_buffer()
-buffers = load_adx_buffers()
-high_buffer = buffers["highs"]
-low_buffer = buffers["lows"]
-close_buffer = buffers["closes"]
 
 LOG_FILE = "fx_trade_log.csv"
 
@@ -116,7 +112,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 notify_slack(f"[即時損切] 損失が {profit} 円 → 強制決済実行")
                 close_order(pid, size_str, close_side)
                 write_log("LOSS_CUT_FAST", bid)
-
+                trend=None
         await asyncio.sleep(interval_sec)
 
 # === 設定読み込み ===
@@ -215,9 +211,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     last_rsi_state = None  # rsiの状態を追跡
     last_adx_state = None  # adx状態の変化通知
 
-    high_prices = []
-    low_prices = []
-    close_prices = []
+    buffers = load_adx_buffers()
+    high_prices = buffers["highs"]
+    low_prices = buffers["lows"]
+    close_prices = buffers["closes"]
 
     while not stop_event.is_set():
         p = get_price()
