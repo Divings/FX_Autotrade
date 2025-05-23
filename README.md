@@ -68,5 +68,4 @@ API_SECRET=あなたのAPIシークレット
 - 実行中は Ctrl+C で停止してください。
 
 ## 📄 ライセンス
-
-MIT-LICENSE
+This software is currently provided under a proprietary license. The previous version was under the MIT license, but all versions after April 12, 2025, will have restrictions on commercial use, redistribution, and modification.

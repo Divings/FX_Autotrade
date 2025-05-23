@@ -1,21 +1,21 @@
-MIT License
+Copyright (c) 2025 Innovation Craft Inc. All rights reserved.
 
-Copyright (c) 2025 古雅倫也
+本ソフトウェア「AutoTrade.py」（以下「本ソフトウェア」といいます）は、Innovation Craft Inc.（以下「当社」といいます）が著作権を保有し、プロプライエタリライセンスのもと提供されます。
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+本ソフトウェアの全部または一部を、当社の事前の書面による許可なく以下の行為を行うことを禁止します。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. 商用利用
+2. 改変、逆コンパイル、リバースエンジニアリング
+3. 再配布（有償・無償を問いません）
+4. 複製、転送、共有（法人内での使用を含みます）
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+使用者は、本ソフトウェアを自己の責任において使用するものとし、本ソフトウェアの使用または使用不能から生じるいかなる損害についても、当社は一切責任を負いません。
+
+本ライセンスは日本法に準拠し、東京地方裁判所を第一審の専属的合意管轄裁判所とします。
+
+本ソースコードは学習目的・閲覧目的でのみ公開されています。  
+改変、複製、再配布、または本ソースコードを利用した新たなソフトウェアの作成は禁止されています。
+
+お問い合わせ先：
+Innovation Craft Inc.
+Eメール: innovationcraft@outlook.jp

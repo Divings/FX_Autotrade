@@ -1,3 +1,7 @@
+# Copyright (c) 2025 Innovation Craft Inc. All Rights Reserved.
+# 本ソフトウェアは Innovation Craft Inc. のプロプライエタリライセンスに基づいて提供されています。
+# 本ソフトウェアの使用、複製、改変、再配布には Innovation Craft Inc. の事前の書面による許可が必要です。
+
 import os
 import hmac
 import hashlib
