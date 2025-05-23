@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from dotenv import load_dotenv
 from slack_notify import notify_slack
+import sys
 import asyncio
 import statistics
 import pandas as pd
@@ -135,6 +136,7 @@ def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
     save_state(shared_state)
     save_price_buffer(price_buffer)
+    sys.exit(0)
 
 # === 環境変数の読み込み ===
 load_dotenv()
