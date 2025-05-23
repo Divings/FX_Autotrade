@@ -44,7 +44,8 @@ shared_state = {
     "last_long_ma": None ,
     "last_skip_notice": None,
     "last_spread":None,  # ← これも追加
-    "rsi_adx_none_notice":False
+    "rsi_adx_none_notice":False,
+    "RSI":None
 }
 adx_p=load_adx_buffers()
 notify_slack("自動売買システム起動")
@@ -281,6 +282,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         rsi_state = None
         if rsi is not None:
+            shared_state["RSI"]=rsi
             if rsi >= 70:
                 rsi_state = "overbought"
             elif rsi <= 30:
@@ -571,19 +573,32 @@ async def auto_trade():
                     close_side = "SELL" if side == "BUY" else "BUY"
 
                     profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
-
+                    rsi=shared_state.get("RSI")
                     if profit >= MIN_PROFIT:
                         notify_slack(f"[決済] 利確条件（利益が {profit} 円）→ 決済")
                         close_order(pid, size_str, close_side)
                         write_log("SELL", bid)
                         shared_state["trend"]=None
                         shared_state["last_trend"]=None
+                    # RSI反発による利確（BUYのみ例示）
+                    elif side == "BUY" and rsi >= 45 and profit > 0:
+                        notify_slack(f"[決済] RSI反発による早期利確（RSI: {rsi:.2f}, 利益: {profit:.2f} 円）→ 決済")
+                        close_order(pid, size_str, close_side)
+                        write_log("RSI_PROFIT", bid)
+                        shared_state["trend"] = None
+                        shared_state["last_trend"] = None
                     elif profit <= -MAX_LOSS:
                         notify_slack(f"[決済] 損切り条件（損失が {profit} 円）→ 決済")
                         close_order(pid, size_str, close_side)
                         write_log("LOSS_CUT", bid)
                         shared_state["trend"]=None
                         shared_state["last_trend"]=None
+                    elif close_side == "SELL" and rsi <= 55 and profit > 0:
+                        notify_slack(f"[決済] RSI反落による早期利確（RSI: {rsi:.2f}, 利益: {profit:.2f} 円）→ 決済")
+                        close_order(pid, size_str, close_side)
+                        write_log("RSI_PROFIT", bid)
+                        shared_state["trend"] = None
+                        shared_state["last_trend"] = None
                     else:
                         if abs(profit) > 10:
                             notify_slack(f"[保有] 継続 {profit}円")
