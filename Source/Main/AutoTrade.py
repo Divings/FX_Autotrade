@@ -113,7 +113,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 notify_slack(f"[即時損切] 損失が {profit} 円 → 強制決済実行")
                 close_order(pid, size_str, close_side)
                 write_log("LOSS_CUT_FAST", bid)
-                trend=None
+                shared_state["trend"] = None
         await asyncio.sleep(interval_sec)
 
 # === 設定読み込み ===
