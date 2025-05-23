@@ -41,7 +41,6 @@ def load_price_buffer():
         return deque(maxlen=BUFFER_MAXLEN)
 
 def save_adx_buffers(adx):
-
     adx["last_saved"] = datetime.now().isoformat()
     with open(ADX_BUFFER_FILE, "w") as f:
         json.dump(adx, f)
@@ -49,7 +48,7 @@ def save_adx_buffers(adx):
 def load_adx_buffers():
     if not os.path.exists(ADX_BUFFER_FILE):
         # print("[INFO] ADXバッファファイルが存在しません。初期化します。")
-        return {"adx": None, "last_saved": None}
+        return None
 
     try:
         with open(ADX_BUFFER_FILE, "r", encoding="utf-8") as f:
@@ -60,5 +59,5 @@ def load_adx_buffers():
             
 
     except Exception as e:
-        print(f"[WARN] ADXバッファ読み込みに失敗: {e}")
-        return {"adx": None, "last_saved": None}
+        #print(f"[WARN] ADXバッファ読み込みに失敗: {e}")
+        return None

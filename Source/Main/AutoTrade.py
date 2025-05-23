@@ -44,7 +44,10 @@ shared_state = {
 }
 adx_p=load_adx_buffers()
 notify_slack("自動売買システム起動")
-notify_slack(f"直前のADX値:{adx_p:.2f} (参考値)")
+if adx_p is None:
+    pass
+else:
+    notify_slack(f"直前のADX値:{adx_p:.2f} (参考値)")
 # == 記録済みデータ読み込み ===
 shared_state = load_state()
 price_buffer = load_price_buffer()
