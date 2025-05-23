@@ -25,7 +25,10 @@ from state_utils import (
     save_adx_buffers,
     load_adx_buffers
 )
-
+mdx_data={
+    "adx":None,
+    "last_saved":None
+}
 shared_state = {
     "trend": None,
     "last_trend": None,
@@ -39,9 +42,9 @@ shared_state = {
     "last_spread":None,  # ← これも追加
     "rsi_adx_none_notice":False
 }
-
+adx_p=load_adx_buffers()
 notify_slack("自動売買システム起動")
-
+notify_slack(f"直前のADX値:{adx_p:.2f} (参考値)")
 # == 記録済みデータ読み込み ===
 shared_state = load_state()
 price_buffer = load_price_buffer()
@@ -205,7 +208,9 @@ def calculate_adx(highs, lows, closes, period=14):
     minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr)
     dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
     adx = dx.rolling(window=period).mean()
-
+    
+    mdx_data["adx"]=adx.iloc[-1]
+    
     return adx.iloc[-1]
 
 # === トレンド判定を拡張（RSI+ADX込み） ===
@@ -213,10 +218,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     last_rsi_state = None  # rsiの状態を追跡
     last_adx_state = None  # adx状態の変化通知
 
-    buffers = load_adx_buffers()
-    high_prices = buffers["highs"]
-    low_prices = buffers["lows"]
-    close_prices = buffers["closes"]
+    
+    high_prices=[]
+    low_prices = []
+    close_prices = []
 
     while not stop_event.is_set():
         p = get_price()
@@ -594,4 +599,4 @@ if __name__ == "__main__":
     except:
         save_state(shared_state)
         save_price_buffer(price_buffer)
-        save_adx_buffers(high_buffer, low_buffer, close_buffer)
+        save_adx_buffers(mdx_data)

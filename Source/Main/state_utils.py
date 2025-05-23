@@ -40,38 +40,25 @@ def load_price_buffer():
     except:
         return deque(maxlen=BUFFER_MAXLEN)
 
-def save_adx_buffers(highs, lows, closes):
-    data = {
-        "timestamp": datetime.now().isoformat(),
-        "highs": list(highs),
-        "lows": list(lows),
-        "closes": list(closes),
-    }
-    with open(ADX_BUFFER_FILE, "wb") as f:
-        pickle.dump(data, f)
+def save_adx_buffers(adx):
+
+    adx["last_saved"] = datetime.now().isoformat()
+    with open(ADX_BUFFER_FILE, "w") as f:
+        json.dump(adx, f)
 
 def load_adx_buffers():
+    if not os.path.exists(ADX_BUFFER_FILE):
+        # print("[INFO] ADXバッファファイルが存在しません。初期化します。")
+        return {"adx": None, "last_saved": None}
+
     try:
-        with open(ADX_BUFFER_FILE, "rb") as f:
-            data = pickle.load(f)
-            timestamp = data.get("timestamp")
-            if timestamp:
-                saved_time = datetime.fromisoformat(timestamp)
-                if datetime.now() - saved_time > timedelta(minutes=12):
-                    # 古すぎるデータは無効とする
-                    return {
-                        "highs": deque(maxlen=BUFFER_MAXLEN),
-                        "lows": deque(maxlen=BUFFER_MAXLEN),
-                        "closes": deque(maxlen=BUFFER_MAXLEN),
-                    }
-            return {
-                "highs": deque(data.get("highs", []), maxlen=BUFFER_MAXLEN),
-                "lows": deque(data.get("lows", []), maxlen=BUFFER_MAXLEN),
-                "closes": deque(data.get("closes", []), maxlen=BUFFER_MAXLEN),
-            }
-    except:
-        return {
-            "highs": deque(maxlen=BUFFER_MAXLEN),
-            "lows": deque(maxlen=BUFFER_MAXLEN),
-            "closes": deque(maxlen=BUFFER_MAXLEN),
-        }
+        with open(ADX_BUFFER_FILE, "r", encoding="utf-8") as f:
+            adx_data = json.load(f)
+
+        # 構造確認と初期化フォールバック
+        return adx_data.get("adx", None)
+            
+
+    except Exception as e:
+        print(f"[WARN] ADXバッファ読み込みに失敗: {e}")
+        return {"adx": None, "last_saved": None}
