@@ -328,11 +328,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 notify_slack(f"[ボラティリティ判定] 高ボラだがRSI/ADX条件満たさず → スキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
                 shared_state["last_skip_notice"] = True
 
-        else:
-            shared_state["trend"] = None
-            if not shared_state.get("last_skip_notice", False):
-                notify_slack("[MAトレンド判定] 差が小さく方向不明 → スキップ")
-                shared_state["last_skip_notice"] = True
+            else:
+                shared_state["trend"] = None
+                if not shared_state.get("last_skip_notice", False):
+                    notify_slack("[MAトレンド判定] 差が小さく方向不明 → スキップ")
+                    shared_state["last_skip_notice"] = True
 
         await asyncio.sleep(interval_sec)
 
