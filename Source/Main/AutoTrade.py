@@ -325,7 +325,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend"] = None
                 shared_state["last_skip_notice"] = True
 
-            elif spread >= MAX_SPREAD:
+            elif spread > MAX_SPREAD:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
                     notify_slack(f"[ボラティリティ判定] 高ボラだがRSI/ADX条件満たさず → スキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
