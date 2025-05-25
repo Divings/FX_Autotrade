@@ -297,9 +297,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             last_adx_state = "weak"
         elif adx >= 20:
             last_adx_state = "strong"
+        
         ask = prices["ask"]
         bid = prices["bid"]
         spread = abs(ask - bid)
+        
         if abs(diff) >= 0.03 and rsi_state == "neutral" and adx >= 25:
             trend = "BUY" if diff > 0 else "SELL"
             shared_state["trend"] = trend
@@ -313,25 +315,21 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 trend = "BUY" if diff > 0 else "SELL"
                 prices = get_price()
 
-                
-            else:
-                shared_state["last_spread"] = None 
-                if shared_state.get("last_trend") and shared_state["last_trend"] != trend:
-                    notify_slack(f"[建玉スキップ] 高ボラ中に方向反転検知（{shared_state['last_trend']}→{trend}）")
-                    shared_state["trend"] = None
-                    shared_state["last_skip_notice"] = True
-                else:
-                    if spread < MAX_SPREAD:
-                        shared_state["trend"] = trend
-                        shared_state["last_skip_notice"] = False
-                        shared_state["last_trend"] = trend
-                        notify_slack(f"[ボラティリティ判定] 高ボラ強制トレンド方向は {trend}（RSI={rsi:.2f}, ADX={adx:.2f}）")
-            else:
+                # 強制トレンド方向に従う
+                shared_state["trend"] = trend
+                shared_state["last_skip_notice"] = False
+                shared_state["last_trend"] = trend
+                notify_slack(f"[ボラティリティ判定] 高ボラ強制トレンド方向は {trend}（RSI={rsi:.2f}, ADX={adx:.2f}）")
+            elif shared_state.get("last_trend") and shared_state["last_trend"] != ("BUY" if diff > 0 else "SELL"):
+                notify_slack(f"[建玉スキップ] 高ボラ中に方向反転検知（{shared_state['last_trend']}→{('BUY' if diff > 0 else 'SELL')}）")
+                shared_state["trend"] = None
+                shared_state["last_skip_notice"] = True
+
+            elif spread >= MAX_SPREAD:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
                     notify_slack(f"[ボラティリティ判定] 高ボラだがRSI/ADX条件満たさず → スキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
                     shared_state["last_skip_notice"] = True
-
         else:
             shared_state["trend"] = None
             if not shared_state.get("last_skip_notice", False):
