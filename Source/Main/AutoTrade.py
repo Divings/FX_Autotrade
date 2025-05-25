@@ -21,6 +21,7 @@ import statistics
 import signal
 from collections import deque
 import mysql.connector
+from conf_load import load_settings_from_db
 from state_utils import (
     save_state,
     load_state,
@@ -156,9 +157,9 @@ def handle_exit(signum, frame):
     sys.exit(0)
 
 # === 環境変数の読み込み ===
-load_dotenv()
-API_KEY = os.getenv("API_KEY")
-API_SECRET = os.getenv("API_SECRET")
+conf=load_settings_from_db()
+API_KEY = conf["API_KEY"]
+API_SECRET = conf["API_SECRET"]
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
