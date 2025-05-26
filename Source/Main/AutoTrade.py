@@ -31,11 +31,6 @@ from state_utils import (
     load_adx_buffers
 )
 
-mdx_data={
-    "adx":None,
-    "last_saved":None
-}
-
 shared_state = {
     "trend": None,
     "last_trend": None,
@@ -52,12 +47,7 @@ shared_state = {
     "entry_time":None
 }
 
-adx_p=load_adx_buffers()
 notify_slack("自動売買システム起動")
-if adx_p is None:
-    pass
-else:
-    notify_slack(f"直前のADX値:{adx_p:.2f} (参考値)")
 
 # == 記録済みデータ読み込み ===
 shared_state = load_state()
@@ -221,12 +211,16 @@ def calculate_adx(highs, lows, closes, period=14):
     atr = tr.rolling(window=period).mean()
     plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr)
     minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr)
-    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
+
+    # ✅ 分母がゼロのとき小さな値に置き換える
+    denominator = plus_di + minus_di
+    denominator = denominator.replace(0, 1e-10)
+
+    dx = (abs(plus_di - minus_di) / denominator) * 100
     adx = dx.rolling(window=period).mean()
     
-    mdx_data["adx"]=adx.iloc[-1]
-    
-    return adx.iloc[-1]
+    result = adx.iloc[-1]
+    return None if pd.isna(result) else result
 
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
@@ -263,11 +257,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         long_ma = sum(list(price_buffer)[-long_period:]) / long_period
         diff = short_ma - long_ma
 
-        rsi = calculate_rsi(list(price_buffer), period=14)
-        adx = calculate_adx(high_prices, low_prices, close_prices, period=14)
-        logging.info(f"[DEBUG] RSI: {rsi}, ADX: {adx}")
-        logging.info(f"[DEBUG] 蓄積: price_buffer={len(price_buffer)}, high={len(high_prices)}, close={len(close_prices)}")
-        logging.info(f"[DEBUG] RSI状態: {rsi_state}, diff: {diff}")
+        try:
+            rsi = calculate_rsi(list(price_buffer), period=14)
+            adx = calculate_adx(high_prices, low_prices, close_prices, period=14)
+            logging.info(f"[DEBUG] RSI={rsi}, ADX={adx}")
+        except Exception as e:
+            logging.exception("RSIまたはADXの計算中に例外が発生")
+            notify_slack(f"[エラー] RSI/ADX計算中に例外: {e}")
+            await asyncio.sleep(interval_sec)
+            continue
         if rsi is None or adx is None:
             shared_state["trend"] = None
             logging.info(f"[DEBUG] RSI={rsi}, ADX={adx}")
@@ -285,7 +283,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             rsi_state = "oversold"
         else:
             rsi_state = "neutral"
-
+        logging.info(f"[DEBUG] MA差: diff={diff}, spread={spread}")
+        logging.info(f"[DEBUG] RSI状態: {rsi_state}")
         shared_state["RSI"] = rsi
         ask = prices["ask"]
         bid = prices["bid"]
@@ -671,4 +670,4 @@ if __name__ == "__main__":
     except:
         save_state(shared_state)
         save_price_buffer(price_buffer)
-        save_adx_buffers(mdx_data)
+        #save_adx_buffers(mdx_data)
