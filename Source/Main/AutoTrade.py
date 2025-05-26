@@ -233,12 +233,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     last_rsi_state = None
     last_adx_state = None
 
-    high_prices = []
-    low_prices = []
-    close_prices = []
+    high_prices = deque(maxlen=240)
+    low_prices = deque(maxlen=240)
+    close_prices = deque(maxlen=240)
 
     while not stop_event.is_set():
         p = get_price()
+        logging.info(f"[DEBUG] price_buffer: {len(price_buffer)}")
+       
         if p:
             price_buffer.append(p["bid"])
             high_prices.append(p["ask"])
@@ -263,9 +265,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         rsi = calculate_rsi(list(price_buffer), period=14)
         adx = calculate_adx(high_prices, low_prices, close_prices, period=14)
-
+        logging.info(f"[DEBUG] RSI: {rsi}, ADX: {adx}")
+        logging.info(f"[DEBUG] 蓄積: price_buffer={len(price_buffer)}, high={len(high_prices)}, close={len(close_prices)}")
+        logging.info(f"[DEBUG] RSI状態: {rsi_state}, diff: {diff}")
         if rsi is None or adx is None:
             shared_state["trend"] = None
+            logging.info(f"[DEBUG] RSI={rsi}, ADX={adx}")
             if not shared_state.get("rsi_adx_none_notice", False):
                 notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
                 shared_state["rsi_adx_none_notice"] = True
@@ -308,7 +313,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 prices = get_price()  # 必要に応じて取得しなおす
                 spread = abs(prices["ask"] - prices["bid"]) if prices else spread  # 安全対策
 
-            if spread < MAX_SPREAD:
+            if spread <= MAX_SPREAD:
                 # ★このブロックを条件付きで実行★
                 shared_state["trend"] = trend
                 shared_state["last_skip_notice"] = False
