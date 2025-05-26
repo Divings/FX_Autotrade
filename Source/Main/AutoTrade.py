@@ -22,6 +22,7 @@ import signal
 from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
+from datetime import datetime, timedelta
 from state_utils import (
     save_state,
     load_state,
@@ -47,6 +48,27 @@ shared_state = {
     "entry_time":None
 }
 
+TEST = False # デバッグ用フラグ
+if os.path.exists("fx_debug_log.txt")==True:
+    os.remove("fx_debug_log.txt")
+
+# ===ログ設定 ===
+LOG_FILE = "fx_debug_log.txt"
+_log_last_reset = datetime.now()
+def setup_logging():
+    """初期ログ設定（起動時）"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'),
+        ]
+    )
+    
+try:
+    setup_logging()
+except Exception as e:
+    print(f"ログ初期化時にエラー: {e}")
 notify_slack("自動売買システム起動")
 
 # == 記録済みデータ読み込み ===
@@ -155,7 +177,35 @@ FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
-# monitor_trend() の外で共有してもOK（必要に応じて）
+
+# 1時間ごとにログファイルを初期化（TEST時はスキップ)
+def reset_logging_if_needed():
+    
+    global _log_last_reset
+    if TEST:
+        return
+
+    now = datetime.now()
+    if now - _log_last_reset >= timedelta(hours=1):
+        _log_last_reset = now
+
+        for handler in logging.root.handlers[:]:
+            handler.close()
+            logging.root.removeHandler(handler)
+
+        # ファイルを初期化（中身を消す）
+        open(LOG_FILE, "w").close()
+
+        # 再設定
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s [%(levelname)s] %(message)s',
+            handlers=[
+                logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'),
+            ]
+        )
+        logging.info("[INFO] ログを初期化しました（1時間ごと）")
+
 
 # === 現在価格取得 ===
 def get_price():
@@ -232,19 +282,19 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     close_prices = deque(maxlen=240)
 
     while not stop_event.is_set():
+        reset_logging_if_needed()
         p = get_price()
-        logging.info(f"[DEBUG] price_buffer: {len(price_buffer)}")
-       
-        if p:
-            price_buffer.append(p["bid"])
-            high_prices.append(p["ask"])
-            low_prices.append(p["bid"])
-            close_prices.append((p["ask"] + p["bid"]) / 2)
+        if not p:
+            logging.warning("[警告] 価格データの取得に失敗 → スキップ")
+            await asyncio.sleep(interval_sec)
+            continue
 
-            if len(high_prices) > 240:
-                high_prices.pop(0)
-                low_prices.pop(0)
-                close_prices.pop(0)
+        logging.info(f"[DEBUG] price_buffer: {len(price_buffer)}")
+
+        price_buffer.append(p["bid"])
+        high_prices.append(p["ask"])
+        low_prices.append(p["bid"])
+        close_prices.append((p["ask"] + p["bid"]) / 2)
 
         if len(price_buffer) < long_period:
             if not shared_state.get("trend_init_notice"):
@@ -266,9 +316,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             notify_slack(f"[エラー] RSI/ADX計算中に例外: {e}")
             await asyncio.sleep(interval_sec)
             continue
+
         if rsi is None or adx is None:
             shared_state["trend"] = None
-            logging.info(f"[DEBUG] RSI={rsi}, ADX={adx}")
+            logging.warning("[警告] RSIまたはADXがNoneのためスキップ")
             if not shared_state.get("rsi_adx_none_notice", False):
                 notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
                 shared_state["rsi_adx_none_notice"] = True
@@ -283,12 +334,20 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             rsi_state = "oversold"
         else:
             rsi_state = "neutral"
-        logging.info(f"[DEBUG] MA差: diff={diff}, spread={spread}")
-        logging.info(f"[DEBUG] RSI状態: {rsi_state}")
         shared_state["RSI"] = rsi
+
+        prices = get_price()
+        if not prices:
+            logging.warning("[警告] トレンド判定中に価格取得失敗 → スキップ")
+            await asyncio.sleep(interval_sec)
+            continue
         ask = prices["ask"]
         bid = prices["bid"]
         spread = abs(ask - bid)
+
+        logging.info(f"[DEBUG] MA差: diff={diff}, spread={spread}")
+        logging.info(f"[DEBUG] RSI状態: {rsi_state}")
+
         if rsi_state != last_rsi_state:
             if rsi_state == "overbought":
                 shared_state["trend"] = None
@@ -303,17 +362,18 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             last_adx_state = "weak"
         elif adx >= 20:
             last_adx_state = "strong"
-        
-              
-        elif len(price_buffer) >= 5 and statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
+
+        if len(price_buffer) >= 5 and statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
             trend = "BUY" if diff > 0 else "SELL"
-    
+
             if rsi_state == "neutral" and adx >= 25:
-                prices = get_price()  # 必要に応じて取得しなおす
-                spread = abs(prices["ask"] - prices["bid"]) if prices else spread  # 安全対策
+                prices = get_price()
+                if prices:
+                    spread = abs(prices["ask"] - prices["bid"])
+                else:
+                    logging.warning("[警告] 再取得価格がNone → spread保持")
 
             if spread <= MAX_SPREAD:
-                # ★このブロックを条件付きで実行★
                 shared_state["trend"] = trend
                 shared_state["last_skip_notice"] = False
                 shared_state["last_trend"] = trend
@@ -331,7 +391,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             elif not shared_state.get("last_skip_notice", False):
                 notify_slack(f"[ボラティリティ判定] 高ボラだがRSI/ADX条件満たさず → スキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
                 shared_state["last_skip_notice"] = True
-
             else:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
@@ -339,16 +398,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     shared_state["last_skip_notice"] = True
 
         await asyncio.sleep(interval_sec)
-
-# === ログ設定 ===
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler("fx_debug_log.txt"),
-        logging.StreamHandler()
-    ]
-)
 
 # === 署名作成 ===
 def create_signature(timestamp, method, path, body=""):
@@ -414,7 +463,7 @@ def get_margin_status(shared_state):
         data = res.json().get("data", {})
         ratio_raw = data.get("marginRatio")
 
-        if ratio_raw is None or ratio_raw == 0:
+        if ratio_raw is None or ratio_raw == 0 or float(ratio_raw) > 1e6:
             if shared_state.get("last_margin_notify") != "none":
                 notify_slack("[証拠金維持率] ポジションが存在しないため未算出です。※現在0またはNone")
                 shared_state["last_margin_notify"] = "none"
@@ -506,7 +555,7 @@ def close_order(position_id, size,side):
         notify_slack(f"[決済] 失敗: {e}")
         return None
 
-# === ログ記録 ===
+# === 取引ログ記録 ===
 def write_log(action, price):
     file_exists = os.path.exists(LOG_FILE)
     with open(LOG_FILE, "a", newline="") as csvfile:
@@ -670,4 +719,3 @@ if __name__ == "__main__":
     except:
         save_state(shared_state)
         save_price_buffer(price_buffer)
-        #save_adx_buffers(mdx_data)
