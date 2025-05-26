@@ -372,8 +372,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     spread = abs(prices["ask"] - prices["bid"])
                 else:
                     logging.warning("[警告] 再取得価格がNone → spread保持")
-
-            if spread <= MAX_SPREAD:
+                
+            if rsi >= 85:
+                shared_state["trend"] = None
+                if not shared_state.get("last_skip_notice", False):
+                    notify_slack(f"[ボラティリティ判定] RSI過熱のためエントリースキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
+                    shared_state["last_skip_notice"] = True
+            elif spread <= MAX_SPREAD:
                 shared_state["trend"] = trend
                 shared_state["last_skip_notice"] = False
                 shared_state["last_trend"] = trend
