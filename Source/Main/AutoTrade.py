@@ -23,7 +23,7 @@ from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
 from datetime import datetime, timedelta
-from logging import TimedRotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from state_utils import (
     save_state,
     load_state,
@@ -124,7 +124,6 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
                     notify_slack(f"[保有] 建玉{pid} 継続中: {profit}円")
                     last_notified[pid] = profit
         await asyncio.sleep(interval_sec)
-
 
 def load_config_from_mysql():
     try:
@@ -633,8 +632,8 @@ def write_log(action, price):
         writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), action, price])
 
 import time
-
-async def monitor_quick_profit(shared_state, stop_event, interval_sec=3):
+# === 即時利確 ===
+async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
     while not stop_event.is_set():
         positions = get_positions()
         prices = get_price()
