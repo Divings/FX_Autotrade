@@ -682,6 +682,7 @@ async def auto_trade():
     trend_task.add_done_callback(lambda t: notify_slack(f"トレンド関数が終了しました: {t.exception()}"))
     loss_cut_task = asyncio.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quit_profit=asyncio.create_task(monitor_quick_profit(shared_state, stop_event))
+    quit_profit.add_done_callback(lambda t: notify_slack(f"即時利確関数が終了しました: {t.exception()}"))
     
     if is_market_open() != "OPEN":
         notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
