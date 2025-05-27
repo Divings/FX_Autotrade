@@ -23,6 +23,7 @@ from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
 from datetime import datetime, timedelta
+from logging import TimedRotatingFileHandler
 from state_utils import (
     save_state,
     load_state,
@@ -57,12 +58,20 @@ LOG_FILE1 = "fx_debug_log.txt"
 _log_last_reset = datetime.now()
 def setup_logging():
     """初期ログ設定（起動時）"""
+    handler = TimedRotatingFileHandler(
+        LOG_FILE1,
+        when='midnight',       # 毎日深夜にローテート
+        interval=1,            # 1日ごとにローテート
+        backupCount=7,         # 最大7個のバックアップファイルを保持
+        encoding='utf-8',      # エンコーディング指定
+        utc=False              # 日本時間でのローテーション
+    )
+
+    handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        handlers=[
-            logging.FileHandler(LOG_FILE1, mode='a', encoding='utf-8'),
-        ]
+        handlers=[handler]
     )
     
 try:
@@ -311,7 +320,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     close_prices = deque(maxlen=240)
 
     while not stop_event.is_set():
-        reset_logging_if_needed()
+        # reset_logging_if_needed()
         p = get_price()
         if not p:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
@@ -359,7 +368,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
 
         if shared_state.get("entry_time"):
-            elapsed = datetime.now() - shared_state["entry_time"]
+            elapsed = time.time() - shared_state["entry_time"]
             if elapsed.total_seconds() < 60:
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
@@ -671,6 +680,7 @@ async def auto_trade():
 
     hold_status_task = asyncio.create_task(monitor_hold_status(shared_state, stop_event, interval_sec=1))
     trend_task = asyncio.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
+    trend_task.add_done_callback(lambda t: notify_slack(f"トレンド関数が終了しました: {t.exception()}"))
     loss_cut_task = asyncio.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quit_profit=asyncio.create_task(monitor_quick_profit(shared_state, stop_event))
     
