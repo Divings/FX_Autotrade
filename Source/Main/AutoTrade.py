@@ -53,7 +53,7 @@ if os.path.exists("fx_debug_log.txt")==True:
     os.remove("fx_debug_log.txt")
 
 # ===ログ設定 ===
-LOG_FILE = "fx_debug_log.txt"
+LOG_FILE1 = "fx_debug_log.txt"
 _log_last_reset = datetime.now()
 def setup_logging():
     """初期ログ設定（起動時）"""
@@ -61,7 +61,7 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
-            logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'),
+            logging.FileHandler(LOG_FILE1, mode='a', encoding='utf-8'),
         ]
     )
     
@@ -201,11 +201,10 @@ def reset_logging_if_needed():
             level=logging.INFO,
             format='%(asctime)s [%(levelname)s] %(message)s',
             handlers=[
-                logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'),
+                logging.FileHandler(LOG_FILE1, mode='a', encoding='utf-8'),
             ]
         )
         logging.info("[INFO] ログを初期化しました（1時間ごと）")
-
 
 # === 現在価格取得 ===
 def get_price():
@@ -328,6 +327,23 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             shared_state["rsi_adx_none_notice"] = False
 
+
+        if shared_state.get("entry_time"):
+            elapsed = datetime.now() - shared_state["entry_time"]
+            if elapsed.total_seconds() < 60:
+                shared_state["trend"] = None
+                shared_state["last_trend"] = None
+                notify_slack(f"[クールダウン] 前回決済から{elapsed.total_seconds():.1f}秒 → スキップ")
+                shared_state["last_skip_notice"] = True
+                continue
+
+        if rsi < 5:
+            shared_state["trend"] = None
+            if not shared_state.get("last_skip_notice", False):
+                notify_slack(f"[RSI下限] RSI={rsi:.2f} → 反発警戒でスキップ")
+                shared_state["last_skip_notice"] = True
+            continue
+
         if rsi >= 68:
             rsi_state = "overbought"
         elif rsi <= 32:
@@ -373,7 +389,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 else:
                     logging.warning("[警告] 再取得価格がNone → spread保持")
                 
-            if rsi >= 85:
+            if rsi < 15 or rsi > 85:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
                     notify_slack(f"[ボラティリティ判定] RSI過熱のためエントリースキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
