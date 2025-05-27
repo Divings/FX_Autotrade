@@ -87,6 +87,36 @@ DEFAULT_CONFIG = {
     "VOL_THRESHOLD": 0.03
 }
 
+async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
+    last_notified = {}  # 建玉ごとの通知済みprofit記録
+
+    while not stop_event.is_set():
+        positions = get_positions()
+        prices = get_price()
+        if prices is None:
+            await asyncio.sleep(interval_sec)
+            continue
+
+        ask = prices["ask"]
+        bid = prices["bid"]
+
+        for pos in positions:
+            pid = pos["positionId"]
+            entry = float(pos["price"])
+            size = int(pos["size"])
+            side = pos.get("side", "BUY").upper()
+
+            profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
+
+            # 通知条件：利益または損失が±10円以上、かつ通知内容が前回と違うとき
+            if abs(profit) > 10:
+                prev = last_notified.get(pid)
+                if prev is None or abs(prev - profit) >= 5:  # 5円以上変化時のみ再通知
+                    notify_slack(f"[保有] 建玉{pid} 継続中: {profit}円")
+                    last_notified[pid] = profit
+        await asyncio.sleep(interval_sec)
+
+
 def load_config_from_mysql():
     try:
         conn = mysql.connector.connect(
@@ -397,10 +427,16 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 else:
                     shared_state["last_skip_notice"] = False
             elif spread <= MAX_SPREAD:
-                shared_state["trend"] = trend
-                shared_state["last_skip_notice"] = False
-                shared_state["last_trend"] = trend
-                notify_slack(f"[ボラティリティ判定] 高ボラ強制トレンド方向は {trend}（RSI={rsi:.2f}, ADX={adx:.2f}）")
+                if adx > 20:
+                    shared_state["trend"] = trend
+                    shared_state["last_skip_notice"] = False
+                    shared_state["last_trend"] = trend
+                    notify_slack(f"[ボラティリティ判定] 高ボラ強制トレンド方向は {trend}（RSI={rsi:.2f}, ADX={adx:.2f}）")
+                else:
+                    shared_state["trend"] = trend
+                    shared_state["last_skip_notice"] = False
+                    shared_state["last_trend"] = trend
+                    notify_slack(f"[スキップ] ADX={adx:.2f} でトレンド不明確のためトレード抑制")
             else:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
@@ -632,10 +668,12 @@ stop_event = Event()
 # メイン取引処理
 async def auto_trade():
     global trend_none_count
-    
+
+    hold_status_task = asyncio.create_task(monitor_hold_status(shared_state, stop_event, interval_sec=1))
     trend_task = asyncio.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     loss_cut_task = asyncio.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quit_profit=asyncio.create_task(monitor_quick_profit(shared_state, stop_event))
+    
     if is_market_open() != "OPEN":
         notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
         sys.exit(0)
@@ -713,9 +751,6 @@ async def auto_trade():
                         write_log("RSI_PROFIT", bid)
                         shared_state["trend"] = None
                         shared_state["last_trend"] = None
-                    else:
-                        if abs(profit) > 10:
-                            notify_slack(f"[保有] 継続 {profit}円")
 
             await asyncio.sleep(CHECK_INTERVAL)
 
@@ -724,6 +759,11 @@ async def auto_trade():
         trend_task.cancel()
         loss_cut_task.cancel()
         quit_profit.cancel()
+        hold_status_task.cancel()
+        try:
+            await hold_status_task
+        except asyncio.CancelledError:
+            notify_slack("[INFO] monitor_hold_status タスク終了")
         try:
             await trend_task
         except asyncio.CancelledError:
