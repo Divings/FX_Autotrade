@@ -194,7 +194,7 @@ def reset_logging_if_needed():
             logging.root.removeHandler(handler)
 
         # ファイルを初期化（中身を消す）
-        open(LOG_FILE, "w").close()
+        open(LOG_FILE1, "w").close()
 
         # 再設定
         logging.basicConfig(
@@ -342,7 +342,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             if not shared_state.get("last_skip_notice", False):
                 notify_slack(f"[RSI下限] RSI={rsi:.2f} → 反発警戒でスキップ")
                 shared_state["last_skip_notice"] = True
-            continue
+                continue
 
         if rsi >= 68:
             rsi_state = "overbought"
@@ -394,6 +394,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if not shared_state.get("last_skip_notice", False):
                     notify_slack(f"[ボラティリティ判定] RSI過熱のためエントリースキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
                     shared_state["last_skip_notice"] = True
+                else:
+                    shared_state["last_skip_notice"] = False
             elif spread <= MAX_SPREAD:
                 shared_state["trend"] = trend
                 shared_state["last_skip_notice"] = False
