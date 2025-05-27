@@ -2,10 +2,9 @@
 import os
 import requests
 from dotenv import load_dotenv
-
-load_dotenv()
-
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+from conf_load import load_settings_from_db
+config1=load_settings_from_db()
+SLACK_WEBHOOK_URL = config1["SLACK_WEBHOOK_URL"]
 
 def notify_slack(message: str):
     if not SLACK_WEBHOOK_URL:
