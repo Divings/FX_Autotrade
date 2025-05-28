@@ -656,7 +656,9 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             # entry_timeが記録されている前提
-            entry_time = shared_state.get("entry_time", 0)
+            entry_time = shared_state.get("entry_time")
+            if not entry_time:
+                continue  # スキップ
             elapsed = time.time() - entry_time
 
             # 即時利確条件: 60秒以内 & 利益10円以上
