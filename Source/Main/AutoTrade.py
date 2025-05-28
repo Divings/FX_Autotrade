@@ -658,7 +658,7 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
 
             # entry_timeが記録されている前提
             entry_time = shared_state.get("entry_time")
-            if not entry_time:
+            if entry_time is None:
                 continue  # スキップ
             elapsed = time.time() - entry_time
 
