@@ -32,7 +32,7 @@ from state_utils import (
     save_adx_buffers,
     load_adx_buffers
 )
-
+from logs import write_log
 shared_state = {
     "trend": None,
     "last_trend": None,
@@ -625,13 +625,13 @@ def close_order(position_id, size,side):
         return None
 
 # === 取引ログ記録 ===
-def write_log(action, price):
-    file_exists = os.path.exists(LOG_FILE)
-    with open(LOG_FILE, "a", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        if not file_exists:
-            writer.writerow(["timestamp", "action", "price"])
-        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), action, price])
+# def write_log(action, price):
+#     file_exists = os.path.exists(LOG_FILE)
+#     with open(LOG_FILE, "a", newline="") as csvfile:
+#         writer = csv.writer(csvfile)
+#         if not file_exists:
+#             writer.writerow(["timestamp", "action", "price"])
+#         writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), action, price])
 
 import time
 # === 即時利確 ===
