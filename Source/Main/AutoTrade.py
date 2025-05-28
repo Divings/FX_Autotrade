@@ -663,7 +663,7 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             elapsed = time.time() - entry_time
 
             # 即時利確条件: 60秒以内 & 利益10円以上
-            if profit >= 10 and elapsed <= 60:
+            if (elapsed <= 60 and profit >= 10) or (elapsed > 60 and profit >= 30):
                 notify_slack(f"[即時利確] 利益が {profit} 円（{elapsed:.1f}秒保持）→ 決済実行")
                 close_order(pid, size_str, close_side)
                 write_log("QUICK_PROFIT", bid)
