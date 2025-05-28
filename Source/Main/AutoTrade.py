@@ -368,13 +368,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         if shared_state.get("entry_time"):
             elapsed = time.time() - shared_state["entry_time"]
-            if elapsed.total_seconds() < 60:
+            if elapsed < 60:
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
-                notify_slack(f"[クールダウン] 前回決済から{elapsed.total_seconds():.1f}秒 → スキップ")
+                notify_slack(f"[クールダウン] 前回決済から{elapsed:.1f}秒 → スキップ")
                 shared_state["last_skip_notice"] = True
                 continue
-
+            else:
+                shared_state["last_skip_notice"] = False
         if rsi < 5:
             shared_state["trend"] = None
             if not shared_state.get("last_skip_notice", False):
