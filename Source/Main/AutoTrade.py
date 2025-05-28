@@ -226,34 +226,6 @@ FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
 
-# 1時間ごとにログファイルを初期化（TEST時はスキップ)
-def reset_logging_if_needed():
-    
-    global _log_last_reset
-    if TEST:
-        return
-
-    now = datetime.now()
-    if now - _log_last_reset >= timedelta(hours=1):
-        _log_last_reset = now
-
-        for handler in logging.root.handlers[:]:
-            handler.close()
-            logging.root.removeHandler(handler)
-
-        # ファイルを初期化（中身を消す）
-        open(LOG_FILE1, "w").close()
-
-        # 再設定
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s [%(levelname)s] %(message)s',
-            handlers=[
-                logging.FileHandler(LOG_FILE1, mode='a', encoding='utf-8'),
-            ]
-        )
-        logging.info("[INFO] ログを初期化しました（1時間ごと）")
-
 # === 現在価格取得 ===
 def get_price():
     try:
@@ -329,7 +301,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     close_prices = deque(maxlen=240)
 
     while not stop_event.is_set():
-        # reset_logging_if_needed()
         p = get_price()
         if not p:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
@@ -343,26 +314,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         low_prices.append(p["bid"])
         close_prices.append((p["ask"] + p["bid"]) / 2)
         
-        # --- MACDの計算 ---
-        macd, signal = calc_macd(close_prices)
-        if len(macd) < 2 or len(signal) < 2:
-            await asyncio.sleep(interval_sec)
-            continue
-
-        # 直近3本でのMACDクロス判定（だまし防止）
-        macd_cross_up = (
-            macd[-3] <= signal[-3] and
-            macd[-2] <= signal[-2] and
-            macd[-1] > signal[-1]
-        )
-
-        macd_cross_down = (
-            macd[-3] >= signal[-3] and
-            macd[-2] >= signal[-2] and
-            macd[-1] < signal[-1]
-        )
-        # macd_cross_up BUY
-        # macd_cross_down SELL
         if len(price_buffer) < long_period:
             if not shared_state.get("trend_init_notice"):
                 notify_slack("[MAトレンド判定] データ蓄積中 → 判定保留中")
@@ -394,7 +345,32 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             shared_state["rsi_adx_none_notice"] = False
+    
+        # --- MACDの計算 ---
+        macd, signal = calc_macd(close_prices)
+        if len(macd) < 2 or len(signal) < 2:
+            notify_slack("[注意] MACDが未計算のため判定スキップ中")
+            shared_state["last_skip_notice"] = True
+            await asyncio.sleep(interval_sec)
+            continue
+        else:
+            shared_state["last_skip_notice"] = False
+        
+        # 直近3本でのMACDクロス判定（だまし防止）
+        macd_cross_up = (
+            macd[-3] <= signal[-3] and
+            macd[-2] <= signal[-2] and
+            macd[-1] > signal[-1]
+        )
 
+        macd_cross_down = (
+            macd[-3] >= signal[-3] and
+            macd[-2] >= signal[-2] and
+            macd[-1] < signal[-1]
+        )
+
+        logging.warning(f"[INFO] MACD判定値 {macd_cross_down},{macd_cross_up}")
+        
         if not posi:
             if shared_state.get("entry_time"):
                 elapsed = time.time() - shared_state["entry_time"]
