@@ -53,6 +53,15 @@ TEST = False # デバッグ用フラグ
 if os.path.exists("fx_debug_log.txt")==True:
     os.remove("fx_debug_log.txt")
 
+def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
+    #MACDとシグナルラインを返す
+    close_series = pd.Series(close_prices)
+    ema_short = close_series.ewm(span=short_period).mean()
+    ema_long = close_series.ewm(span=long_period).mean()
+    macd = ema_short - ema_long
+    signal = macd.ewm(span=signal_period).mean()
+    return macd.tolist(), signal.tolist()
+
 # ===ログ設定 ===
 LOG_FILE1 = "fx_debug_log.txt"
 _log_last_reset = datetime.now()
@@ -333,7 +342,27 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         high_prices.append(p["ask"])
         low_prices.append(p["bid"])
         close_prices.append((p["ask"] + p["bid"]) / 2)
+        
+        # --- MACDの計算 ---
+        macd, signal = calc_macd(close_prices)
+        if len(macd) < 2 or len(signal) < 2:
+            await asyncio.sleep(interval_sec)
+            continue
 
+        # 直近3本でのMACDクロス判定（だまし防止）
+        macd_cross_up = (
+            macd[-3] <= signal[-3] and
+            macd[-2] <= signal[-2] and
+            macd[-1] > signal[-1]
+        )
+
+        macd_cross_down = (
+            macd[-3] >= signal[-3] and
+            macd[-2] >= signal[-2] and
+            macd[-1] < signal[-1]
+        )
+        # macd_cross_up BUY
+        # macd_cross_down SELL
         if len(price_buffer) < long_period:
             if not shared_state.get("trend_init_notice"):
                 notify_slack("[MAトレンド判定] データ蓄積中 → 判定保留中")
@@ -421,14 +450,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         if len(price_buffer) >= 5 and statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
             trend = "BUY" if diff > 0 else "SELL"
-
+            
             if rsi_state == "neutral" and adx >= 25:
                 prices = get_price()
                 if prices:
                     spread = abs(prices["ask"] - prices["bid"])
                 else:
                     logging.warning("[警告] 再取得価格がNone → spread保持")
-                
+
+            # クロスがないなら採用しない
+            if (trend == "BUY" and not macd_cross_up) or (trend == "SELL" and not macd_cross_down):
+                trend = None  # 明確な転換がないので無視
+                if not shared_state.get("last_skip_notice", False):
+                    notify_slack(f"[判断保留] MACD未クロスのため {trend} エントリーを見送り（RSI={rsi:.2f}, ADX={adx:.2f}）")
+                    shared_state["last_skip_notice"] = True
+                else:
+                    shared_state["last_skip_notice"] = False
             if rsi < 15 or rsi > 85:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
@@ -437,16 +474,17 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 else:
                     shared_state["last_skip_notice"] = False
             elif spread <= MAX_SPREAD:
-                if adx > 20:
-                    shared_state["trend"] = trend
-                    shared_state["last_skip_notice"] = False
-                    shared_state["last_trend"] = trend
-                    notify_slack(f"[ボラティリティ判定] 高ボラ強制トレンド方向は {trend}（RSI={rsi:.2f}, ADX={adx:.2f}）")
-                else:
-                    shared_state["trend"] = trend
-                    shared_state["last_skip_notice"] = False
-                    shared_state["last_trend"] = trend
-                    notify_slack(f"[スキップ] ADX={adx:.2f} でトレンド不明確のためトレード抑制")
+                if trend is not None:
+                    if adx > 20:                  
+                        shared_state["trend"] = trend
+                        shared_state["last_skip_notice"] = False
+                        shared_state["last_trend"] = trend
+                        notify_slack(f"[ボラティリティ判定] 高ボラ強制トレンド方向は {trend}（RSI={rsi:.2f}, ADX={adx:.2f}）")
+                    else:
+                        shared_state["trend"] = trend
+                        shared_state["last_skip_notice"] = False
+                        shared_state["last_trend"] = trend
+                        notify_slack(f"[スキップ] ADX={adx:.2f} でトレンド不明確のためトレード抑制")
             else:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
