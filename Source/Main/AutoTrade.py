@@ -182,6 +182,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 write_log("LOSS_CUT_FAST", bid)
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
+                shared_state["entry_time"] = time.time()
         await asyncio.sleep(interval_sec)
 
 # === 設定読み込み ===
@@ -325,7 +326,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
             await asyncio.sleep(interval_sec)
             continue
-
+        posi=get_positions()
         logging.info(f"[DEBUG] price_buffer: {len(price_buffer)}")
 
         price_buffer.append(p["bid"])
@@ -365,17 +366,17 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             shared_state["rsi_adx_none_notice"] = False
 
-
-        if shared_state.get("entry_time"):
-            elapsed = time.time() - shared_state["entry_time"]
-            if elapsed < 60:
-                shared_state["trend"] = None
-                shared_state["last_trend"] = None
-                notify_slack(f"[クールダウン] 前回決済から{elapsed:.1f}秒 → スキップ")
-                shared_state["last_skip_notice"] = True
-                continue
-            else:
-                shared_state["last_skip_notice"] = False
+        if not posi:
+            if shared_state.get("entry_time"):
+                elapsed = time.time() - shared_state["entry_time"]
+                if elapsed < 60:
+                    shared_state["trend"] = None
+                    shared_state["last_trend"] = None
+                    notify_slack(f"[クールダウン] 前回決済から{elapsed:.1f}秒 → スキップ")
+                    shared_state["last_skip_notice"] = True
+                    continue
+                else:
+                    shared_state["last_skip_notice"] = False
         if rsi < 5:
             shared_state["trend"] = None
             if not shared_state.get("last_skip_notice", False):
@@ -668,7 +669,7 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
                 write_log("QUICK_PROFIT", bid)
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
-
+                shared_state["entry_time"] = time.time()
         await asyncio.sleep(interval_sec)
 
 from threading import Event
@@ -745,6 +746,7 @@ async def auto_trade():
                         write_log("SELL", bid)
                         shared_state["trend"]=None
                         shared_state["last_trend"]=None
+                        shared_state["entry_time"] = time.time()
                     # RSI反発による利確（BUYのみ例示）
                     elif side == "BUY" and rsi >= 45 and profit > 0:
                         notify_slack(f"[決済] RSI反発による早期利確（RSI: {rsi:.2f}, 利益: {profit:.2f} 円）→ 決済")
@@ -752,19 +754,22 @@ async def auto_trade():
                         write_log("RSI_PROFIT", bid)
                         shared_state["trend"] = None
                         shared_state["last_trend"] = None
+                        shared_state["entry_time"] = time.time()
                     elif profit <= -MAX_LOSS:
                         notify_slack(f"[決済] 損切り条件（損失が {profit} 円）→ 決済")
                         close_order(pid, size_str, close_side)
                         write_log("LOSS_CUT", bid)
                         shared_state["trend"]=None
                         shared_state["last_trend"]=None
+                        shared_state["entry_time"] = time.time()
+
                     elif close_side == "SELL" and rsi <= 55 and profit > 0:
                         notify_slack(f"[決済] RSI反落による早期利確（RSI: {rsi:.2f}, 利益: {profit:.2f} 円）→ 決済")
                         close_order(pid, size_str, close_side)
                         write_log("RSI_PROFIT", bid)
                         shared_state["trend"] = None
                         shared_state["last_trend"] = None
-
+                        shared_state["entry_time"] = time.time()
             await asyncio.sleep(CHECK_INTERVAL)
 
     finally:
