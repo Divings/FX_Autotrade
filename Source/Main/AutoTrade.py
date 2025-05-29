@@ -53,7 +53,7 @@ shared_state = {
 TEST = False # デバッグ用フラグ
 if os.path.exists("fx_debug_log.txt")==True:
     os.remove("fx_debug_log.txt")
-
+spread_history = deque(maxlen=5)
 def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     #MACDとシグナルラインを返す
     close_series = pd.Series(close_prices)
@@ -752,12 +752,13 @@ async def auto_trade():
                     size_str = int(pos["size"])
                     side = pos.get("side", "BUY").upper()
                     close_side = "SELL" if side == "BUY" else "BUY"
-                    if spread > MAX_SPREAD:
-                        if last_spread is None or abs(spread - last_spread) >= 0.001 :
-                            notify_slack(f"[スプレッド] {spread:.3f}円 → スプレッドが広すぎるため損切り")
-                            shared_state["last_spread"] = spread
+                    spread = abs(prices["ask"] - prices["bid"])
+                    spread_history.append(spread)
+                    if len(spread_history) == spread_history.maxlen:
+                        if all(s > MAX_SPREAD for s in spread_history):
                             close_order(pid, size_str, close_side)
                             write_log("LOSS_CUT", bid)
+                            notify_slack("[即時損切] スプレッドが一定時間連続で拡大。ポジションを解消しました。")
                     profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
                     rsi=shared_state.get("RSI")
                     if profit >= MIN_PROFIT:
