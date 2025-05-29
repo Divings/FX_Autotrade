@@ -47,13 +47,17 @@ shared_state = {
     "last_spread":None,  # ← これも追加
     "rsi_adx_none_notice":False,
     "RSI":None,
-    "entry_time":None
+    "entry_time":None,
+    "loss_streak":None,
+    "cooldown_until":None
+
 }
 
 TEST = False # デバッグ用フラグ
 if os.path.exists("fx_debug_log.txt")==True:
     os.remove("fx_debug_log.txt")
 spread_history = deque(maxlen=5)
+
 def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     #MACDとシグナルラインを返す
     close_series = pd.Series(close_prices)
@@ -95,6 +99,8 @@ shared_state = load_state()
 price_buffer = load_price_buffer()
 
 LOG_FILE = "fx_trade_log.csv"
+LOSS_STREAK_THRESHOLD = 3
+COOLDOWN_DURATION_SEC = 180  # 3分間
 
 DEFAULT_CONFIG = {
     "LOT_SIZE": 1000,
@@ -105,6 +111,19 @@ DEFAULT_CONFIG = {
     "MAINTENANCE_MARGIN_RATIO": 0.5,
     "VOL_THRESHOLD": 0.03
 }
+
+def record_result(profit, shared_state):
+    if profit < 0:
+        shared_state["loss_streak"] = shared_state.get("loss_streak", 0) + 1
+        if shared_state["loss_streak"] >= LOSS_STREAK_THRESHOLD:
+            shared_state["cooldown_until"] = time.time() + COOLDOWN_DURATION_SEC
+            notify_slack(f"[連敗クールダウン] {LOSS_STREAK_THRESHOLD}連敗のため{COOLDOWN_DURATION_SEC//60}分間停止")
+    else:
+        shared_state["loss_streak"] = 0  # 勝てばリセット
+
+def is_in_cooldown(shared_state):
+    cooldown_until = shared_state.get("cooldown_until", 0)
+    return time.time() < cooldown_until, max(0, int(cooldown_until - time.time()))
 
 async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
     last_notified = {}  # 建玉ごとの通知済みprofit記録
@@ -189,6 +208,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             if profit <= -MAX_LOSS:
                 notify_slack(f"[即時損切] 損失が {profit} 円 → 強制決済実行")
                 close_order(pid, size_str, close_side)
+                record_result(profit, shared_state)
                 write_log("LOSS_CUT_FAST", bid)
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
@@ -302,6 +322,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     close_prices = deque(maxlen=240)
 
     while not stop_event.is_set():
+        in_cd, remaining = is_in_cooldown(shared_state)
+        if in_cd:
+            notify_slack(f"[クールダウン中] あと{remaining}秒 → エントリー判断を停止中")
+            await asyncio.sleep(interval_sec)
+            continue
         p = get_price()
         if not p:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
@@ -383,13 +408,19 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     continue
                 else:
                     shared_state["last_skip_notice"] = False
+   
+        price_range = max(close_prices) - min(close_prices)
+        if price_range < 0.03:
+            trend = None
+            notify_slack("[横ばい判定] 価格レンジが小さすぎるためエントリースキップ")
+
         if rsi < 5:
             shared_state["trend"] = None
             if not shared_state.get("last_skip_notice", False):
                 notify_slack(f"[RSI下限] RSI={rsi:.2f} → 反発警戒でスキップ")
                 shared_state["last_skip_notice"] = True
                 continue
-
+        
         if rsi >= 68:
             rsi_state = "overbought"
         elif rsi <= 32:
@@ -681,6 +712,7 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             if (elapsed <= 60 and profit >= 10) or (elapsed > 60 and profit >= 30):
                 notify_slack(f"[即時利確] 利益が {profit} 円（{elapsed:.1f}秒保持）→ 決済実行")
                 close_order(pid, size_str, close_side)
+                record_result(profit, shared_state)
                 write_log("QUICK_PROFIT", bid)
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
@@ -764,6 +796,7 @@ async def auto_trade():
                     if profit >= MIN_PROFIT:
                         notify_slack(f"[決済] 利確条件（利益が {profit} 円）→ 決済")
                         close_order(pid, size_str, close_side)
+                        record_result(profit, shared_state)
                         write_log("SELL", bid)
                         shared_state["trend"]=None
                         shared_state["last_trend"]=None
@@ -772,6 +805,7 @@ async def auto_trade():
                     elif side == "BUY" and rsi >= 45 and profit > 0:
                         notify_slack(f"[決済] RSI反発による早期利確（RSI: {rsi:.2f}, 利益: {profit:.2f} 円）→ 決済")
                         close_order(pid, size_str, close_side)
+                        record_result(profit, shared_state)
                         write_log("RSI_PROFIT", bid)
                         shared_state["trend"] = None
                         shared_state["last_trend"] = None
@@ -779,6 +813,7 @@ async def auto_trade():
                     elif profit <= -MAX_LOSS:
                         notify_slack(f"[決済] 損切り条件（損失が {profit} 円）→ 決済")
                         close_order(pid, size_str, close_side)
+                        record_result(profit, shared_state)
                         write_log("LOSS_CUT", bid)
                         shared_state["trend"]=None
                         shared_state["last_trend"]=None
@@ -787,6 +822,7 @@ async def auto_trade():
                     elif close_side == "SELL" and rsi <= 55 and profit > 0:
                         notify_slack(f"[決済] RSI反落による早期利確（RSI: {rsi:.2f}, 利益: {profit:.2f} 円）→ 決済")
                         close_order(pid, size_str, close_side)
+                        record_result(profit, shared_state)
                         write_log("RSI_PROFIT", bid)
                         shared_state["trend"] = None
                         shared_state["last_trend"] = None
