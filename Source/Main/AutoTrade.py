@@ -87,7 +87,54 @@ def setup_logging():
         level=logging.INFO,
         handlers=[handler]
     )
+
+
+# 最大240本まで保持（例：1分足で4時間分）
+price_history = deque(maxlen=240)
+def validate_candle_shape_from_prices(price_history, trend):
+    """
+    終値の履歴からローソク足を自動算出し、ノイズ足（ヒゲが長く実体が短い）を判定する。
     
+    Parameters:
+    - price_history: list or deque of float
+        終値の履歴（少なくとも2つ以上必要）
+    - trend: str ("BUY" or "SELL")
+
+    Returns:
+    - trend: str または None（ノイズ足であればNone）
+    """
+
+    if len(price_history) < 2:
+        return trend  # データ不足なら判定しない
+
+    # 直近1本のローソク足を生成（過去4データから）
+    # 終値: 現在
+    current_close = price_history[-1]
+    # 始値: 1本前の足の終値（または指定の範囲平均でもOK）
+    current_open = price_history[-2]
+    # 高値・安値: 過去数本で計算（ここでは直近4本）
+    recent_range = price_history[-4:] if len(price_history) >= 4 else price_history
+    current_high = max(recent_range)
+    current_low = min(recent_range)
+
+    # 実体・ヒゲ長を計算
+    real_body = abs(current_close - current_open)
+    upper_wick = current_high - max(current_close, current_open)
+    lower_wick = min(current_close, current_open) - current_low
+
+    # ノイズ判定（実体が短く、ヒゲが相対的に長い）
+    if trend == "BUY":
+        if real_body < 0.03 and lower_wick > real_body * 2:
+            notify_slack(f"ノイズ判定: BUYエントリー見送り（実体={real_body:.4f}, 下ヒゲ={lower_wick:.4f}）")
+            return None
+
+    elif trend == "SELL":
+        if real_body < 0.03 and upper_wick > real_body * 2:
+            notify_slack(f"ノイズ判定: SELLエントリー見送り（実体={real_body:.4f}, 上ヒゲ={upper_wick:.4f}）")
+            return None
+
+    return trend  # 問題なければそのまま返す
+
 try:
     setup_logging()
 except Exception as e:
@@ -328,6 +375,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     macd_valid = False
     macd_reason = ""
+
+    vstop = 0 # 取引制限時刻判定用
     while not stop_event.is_set():
         in_cd, remaining = is_in_cooldown(shared_state)
         if in_cd:
@@ -404,6 +453,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         logging.warning(f"[INFO] MACD判定値 {macd_cross_down},{macd_cross_up}")
         
+        now = datetime.now()
+        if now.hour >= 22:
+            if vstop == 0:
+                notify_slack(f"[クールダウン] 22時以降のため自動売買スキップ")
+                vstop = 1
+                continue
+        else:
+            vstop = 0
+
         if not posi:
             if shared_state.get("entry_time"):
                 elapsed = time.time() - shared_state["entry_time"]
@@ -416,11 +474,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 else:
                     shared_state["last_skip_notice"] = False
    
-        price_range = max(close_prices) - min(close_prices)
-        if price_range < 0.03:
-            trend = None
-            notify_slack("[横ばい判定] 価格レンジが小さすぎるためエントリースキップ")
-
+        if len(close_prices) >= 5:
+            price_range = max(close_prices) - min(close_prices)
+            if price_range < 0.03:
+                trend = None
+                shared_state["last_skip_notice"] = True
+                notify_slack(f"[横ばい判定] 価格変動幅が小さい（{price_range:.4f}）ためスキップ")
+        
         if rsi < 5:
             shared_state["trend"] = None
             if not shared_state.get("last_skip_notice", False):

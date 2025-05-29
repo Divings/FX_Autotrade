@@ -103,3 +103,4 @@ if not buys.empty and not sells.empty:
     plt.tight_layout()
     plt.savefig("price_history_chart.png")
     plt.show()
+input(" >> ")
