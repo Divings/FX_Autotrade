@@ -112,6 +112,9 @@ DEFAULT_CONFIG = {
     "VOL_THRESHOLD": 0.03
 }
 
+macd_valid = False
+macd_reason = ""
+
 def record_result(profit, shared_state):
     if profit < 0:
         shared_state["loss_streak"] = shared_state.get("loss_streak", 0) + 1
@@ -467,14 +470,33 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.warning("[警告] 再取得価格がNone → spread保持")
 
             # クロスがないなら採用しない
-            if (trend == "BUY" and not macd_cross_up) or (trend == "SELL" and not macd_cross_down):
-                trend = None  # 明確な転換がないので無視
+            # MACD判定強化
+            
+            if trend == "BUY":
+                if macd_cross_up:
+                    macd_valid = True
+                    macd_reason = "MACDクロスBUY"
+            elif adx >= 25 and rsi_state == "neutral":
+                macd_valid = True
+                macd_reason = "MACD片側BUY（緩和）"
+            elif trend == "SELL":
+                if macd_cross_down:
+                    macd_valid = True
+                    macd_reason = "MACDクロスSELL"
+            elif adx >= 25 and rsi_state == "neutral":
+                macd_valid = True
+                macd_reason = "MACD片側SELL（緩和）"
+            if not macd_valid:
+                trend = None
                 if not shared_state.get("last_skip_notice", False):
-                    notify_slack(f"[判断保留] MACD未クロスのため {trend} エントリーを見送り（RSI={rsi:.2f}, ADX={adx:.2f}）")
+                    notify_slack(f"[判断保留] MACDクロス条件未達 → {trend} 見送り（RSI={rsi:.2f}, ADX={adx:.2f}）")
                     shared_state["last_skip_notice"] = True
                 else:
                     shared_state["last_skip_notice"] = False
-            if rsi < 15 or rsi > 85:
+            else:
+                notify_slack(f"[エントリー許可] {macd_reason} 条件で {trend} 検討中（RSI={rsi:.2f}, ADX={adx:.2f}）")
+                shared_state["last_skip_notice"] = False
+            if rsi < 5 or rsi > 85:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
                     notify_slack(f"[ボラティリティ判定] RSI過熱のためエントリースキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
