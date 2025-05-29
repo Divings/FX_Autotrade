@@ -490,6 +490,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             elif adx >= 25 and rsi_state == "neutral":
                 macd_valid = True
                 macd_reason = "MACD片側SELL（緩和）"
+            
             if not macd_valid:
                 trend = None
                 if not shared_state.get("last_skip_notice", False):
@@ -696,15 +697,6 @@ def close_order(position_id, size,side):
     except Exception as e:
         notify_slack(f"[決済] 失敗: {e}")
         return None
-
-# === 取引ログ記録 ===
-# def write_log(action, price):
-#     file_exists = os.path.exists(LOG_FILE)
-#     with open(LOG_FILE, "a", newline="") as csvfile:
-#         writer = csv.writer(csvfile)
-#         if not file_exists:
-#             writer.writerow(["timestamp", "action", "price"])
-#         writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), action, price])
 
 import time
 # === 即時利確 ===
