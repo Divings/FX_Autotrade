@@ -32,6 +32,7 @@ from state_utils import (
     save_adx_buffers,
     load_adx_buffers
 )
+
 from logs import write_log
 shared_state = {
     "trend": None,
@@ -751,7 +752,12 @@ async def auto_trade():
                     size_str = int(pos["size"])
                     side = pos.get("side", "BUY").upper()
                     close_side = "SELL" if side == "BUY" else "BUY"
-
+                    if spread > MAX_SPREAD:
+                        if last_spread is None or abs(spread - last_spread) >= 0.001 :
+                            notify_slack(f"[スプレッド] {spread:.3f}円 → スプレッドが広すぎるため損切り")
+                            shared_state["last_spread"] = spread
+                            close_order(pid, size_str, close_side)
+                            write_log("LOSS_CUT", bid)
                     profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
                     rsi=shared_state.get("RSI")
                     if profit >= MIN_PROFIT:
