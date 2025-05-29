@@ -500,7 +500,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             else:
                 notify_slack(f"[エントリー許可] {macd_reason} 条件で {trend} 検討中（RSI={rsi:.2f}, ADX={adx:.2f}）")
                 shared_state["last_skip_notice"] = False
-            if rsi < 5 or rsi > 85:
+            
+            if rsi < 15 or rsi > 85:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
                     notify_slack(f"[ボラティリティ判定] RSI過熱のためエントリースキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
