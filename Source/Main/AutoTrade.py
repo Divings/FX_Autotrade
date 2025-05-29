@@ -315,6 +315,8 @@ def calculate_adx(highs, lows, closes, period=14):
     result = adx.iloc[-1]
     return None if pd.isna(result) else result
 
+macd_valid = False
+
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     last_rsi_state = None
@@ -324,6 +326,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     low_prices = deque(maxlen=240)
     close_prices = deque(maxlen=240)
 
+    macd_valid = False
+    macd_reason = ""
     while not stop_event.is_set():
         in_cd, remaining = is_in_cooldown(shared_state)
         if in_cd:
