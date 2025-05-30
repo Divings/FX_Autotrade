@@ -562,6 +562,23 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 notify_slack(f"[エントリー許可] {macd_reason} 条件で {trend} 検討中（RSI={rsi:.2f}, ADX={adx:.2f}）")
                 shared_state["last_skip_notice"] = False
             
+            if spread > MAX_SPREAD:
+                prices = get_price()
+                positions = get_positions()
+                if positions is not None:
+                    ask = prices["ask"]
+                    bid = prices["bid"]
+                    entry = float(positions["price"])
+                    profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
+                
+                    pid = positions["positionId"]
+                    size_str = int(positions["size"])
+                    side = positions.get("side", "BUY").upper()
+                    close_side = "SELL" if side == "BUY" else "BUY"
+                    notify_slack(f"[決済] スプレッド拡大により 決済")
+                    close_order(pid, size_str, close_side)
+                    record_result(profit, shared_state)
+            
             if rsi < 15 or rsi > 85:
                 shared_state["trend"] = None
                 if not shared_state.get("last_skip_notice", False):
