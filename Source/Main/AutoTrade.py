@@ -30,7 +30,7 @@ from state_utils import (
     save_price_buffer,
     load_price_buffer,
 )
-
+from Price import extract_price_from_response
 from logs import write_log
 shared_state = {
     "trend": None,
@@ -47,7 +47,8 @@ shared_state = {
     "RSI":None,
     "entry_time":None,
     "loss_streak":None,
-    "cooldown_until":None
+    "cooldown_until":None,
+    "vstop_active":False
 
 }
 
@@ -400,6 +401,16 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
 
         prices = get_price()
+        now = datetime.now()
+        if now.hour >= 22:
+            if not shared_state.get("vstop_active", False):
+                notify_slack(f"[クールダウン] 22時以降のため自動売買スキップ")
+                shared_state["vstop_active"] = True
+                await asyncio.sleep(interval_sec)
+                continue
+        else:
+            shared_state["vstop_active"] = False
+            
         if not prices:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
             await asyncio.sleep(interval_sec)
@@ -464,12 +475,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         now = datetime.now()
         if now.hour >= 22:
-            if vstop == 0:
+            if not shared_state.get("vstop_active", False):
                 notify_slack(f"[クールダウン] 22時以降のため自動売買スキップ")
-                vstop = 1
+                shared_state["vstop_active"] = True
+                await asyncio.sleep(interval_sec)
                 continue
         else:
-            vstop = 0
+            shared_state["vstop_active"] = False
 
         if len(close_prices) >= 5:
             price_range = max(close_prices) - min(close_prices)
@@ -647,13 +659,13 @@ def open_order(side="BUY"):
         start = time.time()
         res = requests.post(BASE_URL_FX + path, headers=headers, data=body)
         end = time.time()
-
+        price = extract_price_from_response(res)
         elapsed = end - start
         data = res.json()
 
         # 成功・失敗判定と詳細通知
         if res.status_code == 200 and "data" in data:
-            price = data["data"].get("price", "取得不可")
+            #price = data["data"].get("price", "取得不可")
             notify_slack(f"[注文] 新規建て成功: {side}（約定価格: {price}）")
         else:
             notify_slack(f"[注文] 新規建て応答異常: {res.status_code} {data}")
@@ -700,13 +712,13 @@ def close_order(position_id, size, side):
         start = time.time()
         res = requests.post(BASE_URL_FX + path, headers=headers, data=body)
         end = time.time()
-
+        price = extract_price_from_response(res)
         elapsed = end - start
         data = res.json()
 
         # 成功応答かチェック
         if res.status_code == 200 and "data" in data:
-            price = data["data"].get("price", "取得不可")
+            # price = data["data"].get("price", "取得不可")
             notify_slack(f"[決済] 成功: {side}（約定価格: {price}）")
         else:
             notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
