@@ -366,45 +366,50 @@ macd_valid = False
 
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
-    last_rsi_state = None
-    last_adx_state = None
-    
+    import statistics
+    from collections import deque
+    from datetime import datetime
+    import time
 
+    price_buffer = deque(maxlen=240)
     high_prices = deque(maxlen=240)
     low_prices = deque(maxlen=240)
     close_prices = deque(maxlen=240)
-    price_buffer = deque(maxlen=240)
 
+    last_rsi_state = None
+    last_adx_state = None
     vstop = 0
 
     while not stop_event.is_set():
-        if datetime.now().hour >= 22:
-            if vstop == 0:
-                notify_slack("[クールダウン] 22時以降のため自動売買スキップ")
-                vstop = 1
-            await asyncio.sleep(interval_sec)
-            continue
-        else:
-            vstop = 0
-
-        p = get_price()
-        if not p:
+        in_cd, remaining = is_in_cooldown(shared_state)
+        if in_cd:
+            notify_slack(f"[クールダウン中] あと{remaining}秒 → エントリー判断を停止中")
             await asyncio.sleep(interval_sec)
             continue
 
-        price_buffer.append(p["bid"])
-        high_prices.append(p["ask"])
-        low_prices.append(p["bid"])
-        close_prices.append((p["ask"] + p["bid"]) / 2)
+        prices = get_price()
+        if not prices:
+            logging.warning("[警告] 価格データの取得に失敗 → スキップ")
+            await asyncio.sleep(interval_sec)
+            continue
 
-        if len(price_buffer) < long_period or len(close_prices) < 20:
+        bid = prices["bid"]
+        ask = prices["ask"]
+        mid = (ask + bid) / 2
+
+        price_buffer.append(bid)
+        high_prices.append(ask)
+        low_prices.append(bid)
+        close_prices.append(mid)
+
+        logging.info(f"[DEBUG] price_buffer: {len(price_buffer)}")
+
+        if len(price_buffer) < long_period:
             if not shared_state.get("trend_init_notice"):
-                notify_slack("[データ蓄積中] トレンド判定保留中")
+                notify_slack("[MAトレンド判定] データ蓄積中 → 判定保留中")
                 shared_state["trend_init_notice"] = True
             await asyncio.sleep(interval_sec)
             continue
-        else:
-            shared_state["trend_init_notice"] = False
 
         short_ma = sum(list(price_buffer)[-short_period:]) / short_period
         long_ma = sum(list(price_buffer)[-long_period:]) / long_period
@@ -413,27 +418,28 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         try:
             rsi = calculate_rsi(list(price_buffer), period=14)
             adx = calculate_adx(high_prices, low_prices, close_prices, period=14)
+            logging.info(f"[DEBUG] RSI={rsi}, ADX={adx}")
         except Exception as e:
-            if not shared_state.get("rsi_adx_none_notice"):
-                notify_slack("[注意] RSI/ADX 計算失敗 → 判定スキップ")
-                shared_state["rsi_adx_none_notice"] = True
+            logging.exception("RSIまたはADXの計算中に例外が発生")
+            notify_slack(f"[エラー] RSI/ADX計算中に例外: {e}")
             await asyncio.sleep(interval_sec)
             continue
 
-        shared_state["rsi_adx_none_notice"] = False
-        shared_state["RSI"] = rsi
-
-        rsi_state = "neutral"
-        if rsi >= 68:
-            rsi_state = "overbought"
-        elif rsi <= 32:
-            rsi_state = "oversold"
+        if rsi is None or adx is None:
+            shared_state["trend"] = None
+            logging.warning("[警告] RSIまたはADXがNoneのためスキップ")
+            if not shared_state.get("rsi_adx_none_notice", False):
+                notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
+                shared_state["rsi_adx_none_notice"] = True
+            await asyncio.sleep(interval_sec)
+            continue
+        else:
+            shared_state["rsi_adx_none_notice"] = False
 
         macd, signal = calc_macd(close_prices)
-        if len(macd) < 3 or len(signal) < 3:
-            if not shared_state.get("last_skip_notice"):
-                notify_slack("[注意] MACD未計算のためスキップ")
-                shared_state["last_skip_notice"] = True
+        if len(macd) < 2 or len(signal) < 2:
+            notify_slack("[注意] MACDが未計算のため判定スキップ中")
+            shared_state["last_skip_notice"] = True
             await asyncio.sleep(interval_sec)
             continue
         else:
@@ -442,22 +448,48 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         macd_cross_up = macd[-3] <= signal[-3] and macd[-2] <= signal[-2] and macd[-1] > signal[-1]
         macd_cross_down = macd[-3] >= signal[-3] and macd[-2] >= signal[-2] and macd[-1] < signal[-1]
 
-        trend = "BUY" if diff > 0 else "SELL"
+        logging.info(f"[INFO] MACD判定値: UP={macd_cross_up}, DOWN={macd_cross_down}")
 
-        prices = get_price()
-        if not prices:
+        now = datetime.now()
+        if now.hour >= 22:
+            if vstop == 0:
+                notify_slack(f"[クールダウン] 22時以降のため自動売買スキップ")
+                vstop = 1
+                continue
+        else:
+            vstop = 0
+
+        if len(close_prices) >= 5:
+            price_range = max(close_prices) - min(close_prices)
+            if price_range < 0.03:
+                shared_state["trend"] = None
+                if not shared_state.get("last_skip_notice", False):
+                    notify_slack(f"[横ばい判定] 価格変動幅が小さい（{price_range:.4f}）ためスキップ")
+                    shared_state["last_skip_notice"] = True
+                await asyncio.sleep(interval_sec)
+                continue
+
+        if rsi < 5:
+            shared_state["trend"] = None
+            if not shared_state.get("last_skip_notice", False):
+                notify_slack(f"[RSI下限] RSI={rsi:.2f} → 反発警戒でスキップ")
+                shared_state["last_skip_notice"] = True
             await asyncio.sleep(interval_sec)
             continue
 
-        ask = prices["ask"]
-        bid = prices["bid"]
-        spread = abs(ask - bid)
+        if rsi >= 68:
+            rsi_state = "overbought"
+        elif rsi <= 32:
+            rsi_state = "oversold"
+        else:
+            rsi_state = "neutral"
+        shared_state["RSI"] = rsi
 
         if rsi_state != last_rsi_state:
             if rsi_state == "overbought":
-                notify_slack(f"[RSI] 買われすぎ RSI={rsi:.2f} → スキップ")
+                notify_slack(f"[RSI] 買われすぎ (RSI={rsi:.2f}) → スキップ")
             elif rsi_state == "oversold":
-                notify_slack(f"[RSI] 売られすぎ RSI={rsi:.2f} → スキップ")
+                notify_slack(f"[RSI] 売られすぎ (RSI={rsi:.2f}) → スキップ")
             last_rsi_state = rsi_state
 
         if adx < 20 and last_adx_state != "weak":
@@ -466,27 +498,21 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         elif adx >= 20:
             last_adx_state = "strong"
 
-        macd_valid = False
-        macd_reason = ""
-
-        if trend == "BUY" and macd_cross_up:
-            macd_valid = True
-            macd_reason = "MACDクロスBUY"
-        elif trend == "SELL" and macd_cross_down:
-            macd_valid = True
-            macd_reason = "MACDクロスSELL"
-
-        if macd_valid and rsi_state == "neutral" and adx >= 25 and spread <= 0.03:
-            shared_state["trend"] = trend
-            shared_state["last_trend"] = trend
-            notify_slack(f"[エントリー許可] {macd_reason}: {trend} (RSI={rsi:.2f}, ADX={adx:.2f})")
-        else:
-            shared_state["trend"] = None
-            if not shared_state.get("last_skip_notice"):
-                notify_slack(f"[スキップ] 条件未達 → {trend}スキップ (RSI={rsi:.2f}, ADX={adx:.2f})")
-                shared_state["last_skip_notice"] = True
+        trend = None
+        if statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
+            trend = "BUY" if diff > 0 else "SELL"
+            if trend == "BUY" and macd_cross_up:
+                shared_state["trend"] = trend
+                notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi:.2f}, ADX={adx:.2f}）")
+            elif trend == "SELL" and macd_cross_down:
+                shared_state["trend"] = trend
+                notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi:.2f}, ADX={adx:.2f}）")
             else:
-                shared_state["last_skip_notice"] = False
+                shared_state["trend"] = None
+                if not shared_state.get("last_skip_notice", False):
+                    notify_slack(f"[スキップ] MACDクロス未検出のためスキップ（RSI={rsi:.2f}, ADX={adx:.2f}）")
+                    shared_state["last_skip_notice"] = True
+                continue
 
         await asyncio.sleep(interval_sec)
 
