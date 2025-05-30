@@ -234,8 +234,10 @@ def load_config_from_mysql():
         print(f"⚠️ 設定読み込み失敗（MySQL）：{e}")
         return DEFAULT_CONFIG
 
-# == 損益即時監視用タスク==
+# == 損益即時監視用タスク ==
 async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
+    SLIPPAGE_BUFFER = 5  # 許容スリッページ（円）
+    
     while not stop_event.is_set():
         positions = get_positions()
         prices = get_price()
@@ -255,14 +257,26 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
 
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
-            if profit <= -MAX_LOSS:
-                notify_slack(f"[即時損切] 損失が {profit} 円 → 強制決済実行")
+            # スリッページバッファ込みで早めに判断
+            if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
+                notify_slack(f"[即時損切] 損失が {profit} 円（許容: -{MAX_LOSS}円 ±{SLIPPAGE_BUFFER}）→ 強制決済実行")
+                
+                start = time.time()
                 close_order(pid, size_str, close_side)
+                end = time.time()
+                
                 record_result(profit, shared_state)
                 write_log("LOSS_CUT_FAST", bid)
+                
+                # 遅延ログも記録
+                elapsed = end - start
+                if elapsed > 0.5:
+                    logging.warning(f"[遅延警告] 決済リクエストに {elapsed:.2f} 秒かかりました")
+
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
                 shared_state["entry_time"] = time.time()
+
         await asyncio.sleep(interval_sec)
 
 # === 設定読み込み ===
@@ -611,13 +625,14 @@ def get_margin_status(shared_state):
 def open_order(side="BUY"):
     path = "/v1/order"
     method = "POST"
-    timestamp = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
+    timestamp = str(int(time.time() * 1000))  # より正確なミリ秒
+
     body_dict = {
-    "symbol": SYMBOL,
-    "side": side,
-    "executionType": "MARKET",
-    "size": str(LOT_SIZE),
-    "symbolType": "FOREX"
+        "symbol": SYMBOL,
+        "side": side,
+        "executionType": "MARKET",
+        "size": str(LOT_SIZE),
+        "symbolType": "FOREX"
     }
 
     body = json.dumps(body_dict, separators=(',', ':'))
@@ -631,18 +646,36 @@ def open_order(side="BUY"):
     }
 
     try:
+        start = time.time()
         res = requests.post(BASE_URL_FX + path, headers=headers, data=body)
-        notify_slack(f"[注文] 新規建て: {side}")
-        return res.json()
+        end = time.time()
+
+        elapsed = end - start
+        data = res.json()
+
+        # 成功・失敗判定と詳細通知
+        if res.status_code == 200 and "data" in data:
+            price = data["data"].get("price", "取得不可")
+            notify_slack(f"[注文] 新規建て成功: {side}（約定価格: {price}）")
+        else:
+            notify_slack(f"[注文] 新規建て応答異常: {res.status_code} {data}")
+
+        # 遅延が0.5秒超えたら警告
+        if elapsed > 0.5:
+            logging.warning(f"[遅延警告] 新規注文に {elapsed:.2f} 秒かかりました")
+
+        return data
     except Exception as e:
         notify_slack(f"[注文] 新規建て失敗: {e}")
         return None
 
+
 # === ポジション決済 ===
-def close_order(position_id, size,side):
+def close_order(position_id, size, side):
     path = "/v1/closeOrder"
     method = "POST"
-    timestamp = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
+    timestamp = str(int(time.time() * 1000))  # より精度の高いミリ秒
+
     body_dict = {
         "symbol": SYMBOL,
         "side": side,
@@ -650,7 +683,7 @@ def close_order(position_id, size,side):
         "settlePosition": [
             {
                 "positionId": position_id,
-                "size": str(size)  # 通貨単位
+                "size": str(size)
             }
         ]
     }
@@ -666,16 +699,36 @@ def close_order(position_id, size,side):
     }
 
     try:
+        start = time.time()
         res = requests.post(BASE_URL_FX + path, headers=headers, data=body)
-        notify_slack(f"[決済] 成功: {side}")
-        return res.json()
+        end = time.time()
+
+        elapsed = end - start
+        data = res.json()
+
+        # 成功応答かチェック
+        if res.status_code == 200 and "data" in data:
+            price = data["data"].get("price", "取得不可")
+            notify_slack(f"[決済] 成功: {side}（約定価格: {price}）")
+        else:
+            notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
+
+        # 遅延が長い場合ログ記録
+        if elapsed > 0.5:
+            logging.warning(f"[遅延警告] 決済APIに {elapsed:.2f} 秒かかりました")
+
+        return data
     except Exception as e:
         notify_slack(f"[決済] 失敗: {e}")
         return None
 
+
 import time
-# === 即時利確 ===
+
+# == 即時利確監視用タスク ==
 async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
+    PROFIT_BUFFER = 5  # 利確ラインに対する安全マージン
+
     while not stop_event.is_set():
         positions = get_positions()
         prices = get_price()
@@ -693,24 +746,35 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             side = pos.get("side", "BUY").upper()
             close_side = "SELL" if side == "BUY" else "BUY"
 
-            # 利益計算
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
-            # entry_timeが記録されている前提
             entry_time = shared_state.get("entry_time")
             if entry_time is None:
-                continue  # スキップ
+                continue
             elapsed = time.time() - entry_time
 
-            # 即時利確条件: 60秒以内 & 利益10円以上
-            if (elapsed <= 60 and profit >= 10) or (elapsed > 60 and profit >= 30):
+            # 利確ライン（スリッページ考慮）
+            short_term_target = 10 + PROFIT_BUFFER
+            long_term_target = 30 + PROFIT_BUFFER
+
+            if (elapsed <= 60 and profit >= short_term_target) or (elapsed > 60 and profit >= long_term_target):
                 notify_slack(f"[即時利確] 利益が {profit} 円（{elapsed:.1f}秒保持）→ 決済実行")
+
+                start = time.time()
                 close_order(pid, size_str, close_side)
+                end = time.time()
+
                 record_result(profit, shared_state)
                 write_log("QUICK_PROFIT", bid)
+
+                elapsed_api = end - start
+                if elapsed_api > 0.5:
+                    logging.warning(f"[遅延警告] 利確リクエストに {elapsed_api:.2f} 秒かかりました")
+
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
                 shared_state["entry_time"] = time.time()
+
         await asyncio.sleep(interval_sec)
 
 from threading import Event
