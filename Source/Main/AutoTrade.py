@@ -377,9 +377,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     MAX_SPREAD = 0.05
     VOL_THRESHOLD = 0.03
-    vstop = 0
-
+    
     while not stop_event.is_set():
+        vstop = 0
+        sstop = 0
         p = get_price()
         if not p:
             await asyncio.sleep(interval_sec)
@@ -421,30 +422,52 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         price_range = max(close_prices) - min(close_prices)
         if price_range < VOL_THRESHOLD:
-            shared_state["trend"] = None
-            notify_slack(f"[横ばい判定] 価格変動幅が小さい（{price_range:.4f}）ためスキップ")
-            continue
+            if sstop == 0:
+                shared_state["trend"] = None
+                notify_slack(f"[横ばい判定] 価格変動幅が小さい（{price_range:.4f}）ためスキップ")
+                sstop = 1
+                continue
+            else:
+                sstop = 0
 
         if rsi < 15 or rsi > 85:
-            shared_state["trend"] = None
-            notify_slack(f"[RSI過熱] RSI={rsi:.2f} → スキップ")
-            continue
+            # shared_state["trend"] = None
+            if not shared_state.get("last_skip_notice", False):
+                shared_state["trend"] = None
+                notify_slack(f"[RSI過熱] RSI={rsi:.2f} → スキップ")
+                shared_state["last_skip_notice"] = True
+                continue
+            else:
+                shared_state["last_skip_notice"] = False
 
         if adx < 20:
-            shared_state["trend"] = None
-            notify_slack(f"[ADX弱] ADX={adx:.2f} → トレンド不明確でスキップ")
-            continue
+            if not shared_state.get("last_skip_notice", False):
+                shared_state["trend"] = None
+                notify_slack(f"[ADX弱] ADX={adx:.2f} → トレンド不明確でスキップ")
+                shared_state["last_skip_notice"] = True
+                continue
+            else:
+                shared_state["last_skip_notice"] = False
 
         if (trend == "BUY" and not macd_cross_up) or (trend == "SELL" and not macd_cross_down):
-            shared_state["trend"] = None
-            notify_slack("[MACD未クロス] クロス条件未達 → スキップ")
-            continue
-
+            if not shared_state.get("last_skip_notice", False):
+                shared_state["trend"] = None
+                notify_slack("[MACD未クロス] クロス条件未達 → スキップ")
+                shared_state["last_skip_notice"] = True
+                continue
+            else:
+                shared_state["last_skip_notice"] = False
+                
         spread = abs(p["ask"] - p["bid"])
         if spread > MAX_SPREAD:
-            shared_state["trend"] = None
-            notify_slack(f"[スプレッド過大] Spread={spread:.4f} → スキップ")
-            continue
+            if not shared_state.get("last_skip_notice", False):
+                shared_state["trend"] = None
+                
+                notify_slack(f"[スプレッド過大] Spread={spread:.4f} → スキップ")
+                shared_state["last_skip_notice"] = True
+                continue
+            else:
+                shared_state["last_skip_notice"] = False
 
         shared_state["trend"] = trend
         notify_slack(f"[エントリー許可] トレンド方向: {trend}（RSI={rsi:.2f}, ADX={adx:.2f}）")
