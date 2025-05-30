@@ -377,10 +377,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     MAX_SPREAD = 0.05
     VOL_THRESHOLD = 0.03
+    vstop = 0
+    sstop = 0
     
     while not stop_event.is_set():
-        vstop = 0
-        sstop = 0
+        
         p = get_price()
         if not p:
             await asyncio.sleep(interval_sec)
