@@ -237,6 +237,7 @@ def load_config_from_mysql():
         print(f"⚠️ 設定読み込み失敗（MySQL）：{e}")
         return DEFAULT_CONFIG
 
+
 # == 損益即時監視用タスク ==
 async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
     SLIPPAGE_BUFFER = 5  # 許容スリッページ（円）
@@ -395,9 +396,16 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     last_rsi_state = None
     last_adx_state = None
-    vstop = 0
-
+    
+    sstop = 0
     while not stop_event.is_set():
+        if is_market_open() != "OPEN":
+                if sstop==0:
+                    notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
+                    sstop = 1    
+                continue
+        else:
+            sstop = 0
         in_cd, remaining = is_in_cooldown(shared_state)
         if in_cd:
             notify_slack(f"[クールダウン中] あと{remaining}秒 → エントリー判断を停止中")
@@ -556,7 +564,7 @@ def is_market_open():
         response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
         response.raise_for_status()
         status = response.json().get("data", {}).get("status")
-        notify_slack(f"[市場] ステータス: {status}")
+        # notify_slack(f"[市場] ステータス: {status}")
         return status
     except Exception as e:
         logging.error(f"[市場] 状態取得失敗: {e}")
@@ -799,7 +807,7 @@ stop_event = Event()
 # メイン取引処理
 async def auto_trade():
     global trend_none_count
-
+    vstop = 0
     hold_status_task = asyncio.create_task(monitor_hold_status(shared_state, stop_event, interval_sec=1))
     trend_task = asyncio.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     trend_task.add_done_callback(lambda t: notify_slack(f"トレンド関数が終了しました: {t.exception()}"))
@@ -807,11 +815,16 @@ async def auto_trade():
     quit_profit=asyncio.create_task(monitor_quick_profit(shared_state, stop_event))
     quit_profit.add_done_callback(lambda t: notify_slack(f"即時利確関数が終了しました: {t.exception()}"))
     
-    if is_market_open() != "OPEN":
-        notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
-        sys.exit(0)
+    
     try:
         while True:
+            if is_market_open() != "OPEN":
+                if vstop==0:
+                    notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
+                    vstop = 1
+                continue
+            else:
+                vstop = 0
             get_margin_status(shared_state)
             positions = get_positions()
             prices = get_price()
