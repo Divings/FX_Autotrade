@@ -52,9 +52,12 @@ shared_state = {
 
 }
 
+args=sys.argv
+file_path = sys.argv[0]  # スクリプトファイルのパス
+folder_path = os.path.dirname(os.path.abspath(file_path))
+os.chdir(folder_path)
+
 TEST = False # デバッグ用フラグ
-if os.path.exists("fx_debug_log.txt")==True:
-    os.remove("fx_debug_log.txt")
 spread_history = deque(maxlen=5)
 
 def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
