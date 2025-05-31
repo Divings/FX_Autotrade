@@ -72,6 +72,7 @@ def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
 # ===ログ設定 ===
 LOG_FILE1 = "fx_debug_log.txt"
 _log_last_reset = datetime.now()
+
 def setup_logging():
     """初期ログ設定（起動時）"""
     handler = TimedRotatingFileHandler(
