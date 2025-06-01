@@ -90,7 +90,6 @@ def setup_logging():
         handlers=[handler]
     )
 
-
 # 最大240本まで保持（例：1分足で4時間分）
 price_history = deque(maxlen=240)
 def validate_candle_shape_from_prices(price_history, trend):
