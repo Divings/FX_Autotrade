@@ -385,8 +385,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     from collections import deque
     from datetime import datetime
     import time
-
-    price_buffer = deque(maxlen=240)
+    
+    global price_buffer
     high_prices = deque(maxlen=240)
     low_prices = deque(maxlen=240)
     close_prices = deque(maxlen=240)
@@ -688,7 +688,6 @@ def open_order(side="BUY"):
         notify_slack(f"[注文] 新規建て失敗: {e}")
         return None
 
-
 # === ポジション決済 ===
 def close_order(position_id, size, side):
     path = "/v1/closeOrder"
@@ -740,7 +739,6 @@ def close_order(position_id, size, side):
     except Exception as e:
         notify_slack(f"[決済] 失敗: {e}")
         return None
-
 
 import time
 
