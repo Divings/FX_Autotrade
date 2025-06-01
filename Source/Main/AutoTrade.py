@@ -740,8 +740,6 @@ def close_order(position_id, size, side):
         notify_slack(f"[決済] 失敗: {e}")
         return None
 
-import time
-
 # == 即時利確監視用タスク ==
 async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
     PROFIT_BUFFER = 5  # 利確ラインに対する安全マージン
