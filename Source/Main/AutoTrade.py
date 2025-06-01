@@ -49,7 +49,6 @@ shared_state = {
     "loss_streak":None,
     "cooldown_until":None,
     "vstop_active":False
-
 }
 
 args=sys.argv
