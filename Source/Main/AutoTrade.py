@@ -59,7 +59,6 @@ os.chdir(folder_path)
 TEST = False # デバッグ用フラグ
 spread_history = deque(maxlen=5)
 
-
 def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     #MACDとシグナルラインを返す
     close_series = pd.Series(close_prices)
