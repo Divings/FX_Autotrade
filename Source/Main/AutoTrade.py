@@ -236,7 +236,6 @@ def load_config_from_mysql():
         print(f"⚠️ 設定読み込み失敗（MySQL）：{e}")
         return DEFAULT_CONFIG
 
-
 # == 損益即時監視用タスク ==
 async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
     SLIPPAGE_BUFFER = 5  # 許容スリッページ（円）
