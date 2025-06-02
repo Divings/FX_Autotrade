@@ -388,7 +388,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     import logging
 
     global price_buffer
-    price_buffer = deque(maxlen=240)
+    
     high_prices = deque(maxlen=240)
     low_prices = deque(maxlen=240)
     close_prices = deque(maxlen=240)
