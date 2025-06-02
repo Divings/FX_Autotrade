@@ -49,7 +49,8 @@ shared_state = {
     "loss_streak":None,
     "cooldown_until":None,
     "vstop_active":False,
-    "adx_wait_notice":False
+    "adx_wait_notice":False,
+    "forced_entry_date":False
 }
 
 args=sys.argv
@@ -523,6 +524,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 await asyncio.sleep(interval_sec)
                 continue
         
+        today_str = datetime.now().strftime("%Y-%m-%d")
         if adx >= 95:
             # 無効化（非常事態）
             shared_state["trend"] = None
@@ -530,6 +532,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.warning("[スキップ] ADX異常値 → 判定中止")
             continue
         elif adx >= 70 and abs(diff) > 0.015 and trend is not None:
+            last_forced_entry_date = shared_state.get("forced_entry_date")
+
+            if last_forced_entry_date == today_str:
+                logging.info("[強制エントリー制限] 本日すでに実行済みのためスキップ")
+                continue
             # クロス不要で許可
             shared_state["trend"] = trend
             notify_slack(f"[強トレンド] MACDクロス無視してエントリー（ADX={adx:.2f}, diff={diff:.4f}）")
