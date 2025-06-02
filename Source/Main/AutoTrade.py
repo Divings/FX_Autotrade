@@ -536,11 +536,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
             if last_forced_entry_date == today_str:
                 logging.info("[強制エントリー制限] 本日すでに実行済みのためスキップ")
-                continue
-            # クロス不要で許可
-            shared_state["trend"] = trend
-            notify_slack(f"[強トレンド] MACDクロス無視してエントリー（ADX={adx:.2f}, diff={diff:.4f}）")
-            logging.info("[エントリー] ADX強すぎるためクロス無視")
+                
+            else:
+                # クロス不要で許可
+                shared_state["trend"] = trend
+                notify_slack(f"[強トレンド] MACDクロス無視してエントリー（ADX={adx:.2f}, diff={diff:.4f}）")
+                logging.info("[エントリー] ADX強すぎるためクロス無視")
         
         if rsi < 20:
             shared_state["trend"] = None
