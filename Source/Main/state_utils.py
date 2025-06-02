@@ -40,24 +40,28 @@ def load_price_buffer():
     except:
         return deque(maxlen=BUFFER_MAXLEN)
 
-def save_adx_buffers(adx):
-    adx["last_saved"] = datetime.now().isoformat()
-    with open(ADX_BUFFER_FILE, "w") as f:
-        json.dump(adx, f)
+import json
 
-def load_adx_buffers():
-    if not os.path.exists(ADX_BUFFER_FILE):
-        # print("[INFO] ADXバッファファイルが存在しません。初期化します。")
-        return None
+def save_price_history(highs, lows, closes, filename="adx_history.json"):
+    with open(filename, "w") as f:
+        json.dump({
+            "highs": list(highs),
+            "lows": list(lows),
+            "closes": list(closes),
+        }, f)
 
-    try:
-        with open(ADX_BUFFER_FILE, "r", encoding="utf-8") as f:
-            adx_data = json.load(f)
+from collections import deque
+import os
 
-        # 構造確認と初期化フォールバック
-        return adx_data.get("adx", None)
-            
+def load_price_history(filename="adx_history.json", maxlen=240):
+    highs = deque(maxlen=maxlen)
+    lows = deque(maxlen=maxlen)
+    closes = deque(maxlen=maxlen)
 
-    except Exception as e:
-        #print(f"[WARN] ADXバッファ読み込みに失敗: {e}")
-        return None
+    if os.path.exists(filename):
+        with open(filename, "r") as f:
+            data = json.load(f)
+            highs.extend(data.get("highs", []))
+            lows.extend(data.get("lows", []))
+            closes.extend(data.get("closes", []))
+    return highs, lows, closes

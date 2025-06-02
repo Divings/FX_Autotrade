@@ -29,6 +29,8 @@ from state_utils import (
     load_state,
     save_price_buffer,
     load_price_buffer,
+    load_price_history,
+    save_price_history
 )
 from Price import extract_price_from_response
 from logs import write_log
@@ -391,9 +393,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     global price_buffer
     # price_buffer = deque(maxlen=240)
-    high_prices = deque(maxlen=240)
-    low_prices = deque(maxlen=240)
-    close_prices = deque(maxlen=240)
+
+    high_prices, low_prices, close_prices = load_price_history()
 
     trend = None
     
@@ -430,6 +431,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 notify_slack(f"[クールダウン] 22時以降のため自動売買スキップ")
                 logging.info("[時間制限] 22時以降の取引スキップ")
                 shared_state["vstop_active"] = True
+                if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
+                    pass
+                else:
+                    save_price_history(high_prices, low_prices, close_prices)
             await asyncio.sleep(interval_sec)
             continue
         else:
@@ -966,3 +971,4 @@ if __name__ == "__main__":
     except:
         save_state(shared_state)
         save_price_buffer(price_buffer)
+        
