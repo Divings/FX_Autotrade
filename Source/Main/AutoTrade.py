@@ -426,7 +426,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         prices = get_price()
         now = datetime.now()
-        if now.hour >= 22:
+        if now.hour >= 22 or now.hour < 6:
             if not shared_state.get("vstop_active", False):
                 notify_slack(f"[クールダウン] 22時以降のため自動売買スキップ")
                 logging.info("[時間制限] 22時以降の取引スキップ")
@@ -457,9 +457,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 notify_slack(f"[スプレッド超過] 現在のスプレッド={spread:.5f} → エントリーをスキップ")
                 logging.warning(f"[スキップ] スプレッドが広すぎるため判定中止（{spread:.5f} > {MAX_SPREAD:.5f}）")
                 nstop = 1
-                continue
-            else:
-                nstop = 0
+            continue
+        else:
+            nstop = 0
 
         price_buffer.append(bid)
         high_prices.append(ask)
