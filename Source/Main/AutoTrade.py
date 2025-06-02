@@ -491,6 +491,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             shared_state["adx_wait_notice"] = False
+            
         macd, signal = calc_macd(close_prices)
         if len(macd) < 2 or len(signal) < 2:
             notify_slack("[注意] MACDが未計算のため判定スキップ中")
