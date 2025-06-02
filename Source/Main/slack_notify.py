@@ -27,18 +27,19 @@ def notify_slack(message: str):
         color = "#888888"  # グレー（情報）
     else:
         color = "#dddddd"  # 既定（薄グレー）
+    try:
+        # Slackに通知
+        payload = {
+            "attachments": [
+                {
+                    "color": color,
+                    "text": message
+                }
+            ]
+        }
 
-    # Slackに通知
-    payload = {
-        "attachments": [
-            {
-                "color": color,
-                "text": message
-            }
-        ]
-    }
-
-    response = requests.post(SLACK_WEBHOOK_URL, json=payload)
-
-    if response.status_code != 200:
-        raise Exception(f"Slack\u901a\u77e5\u5931\u6557: {response.status_code} - {response.text}")
+        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
+        if response.status_code != 200:
+            print(f"[Slack通知失敗] {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"[Slack通知例外] {e}")
