@@ -394,6 +394,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     low_prices = deque(maxlen=240)
     close_prices = deque(maxlen=240)
 
+    trend = None
+    
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
