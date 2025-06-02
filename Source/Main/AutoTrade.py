@@ -388,7 +388,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     import logging
 
     global price_buffer
-    price_buffer = deque(maxlen=240)
+    # price_buffer = deque(maxlen=240)
     high_prices = deque(maxlen=240)
     low_prices = deque(maxlen=240)
     close_prices = deque(maxlen=240)
@@ -396,7 +396,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
-
+    vstop = 0
     while not stop_event.is_set():
         if is_market_open() != "OPEN":
             if sstop == 0:
@@ -471,11 +471,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
 
         if rsi is None or adx is None:
-            shared_state["trend"] = None
-            notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
-            logging.warning("[スキップ] RSI/ADXがNone")
-            await asyncio.sleep(interval_sec)
-            continue
+            if vstop==0:
+               shared_state["trend"] = None
+               notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
+               logging.warning("[スキップ] RSI/ADXがNone")
+               vstop = 1
+               await asyncio.sleep(interval_sec)
+               continue
+            else:
+                vstop = 0
 
         macd, signal = calc_macd(close_prices)
         if len(macd) < 2 or len(signal) < 2:
