@@ -522,7 +522,19 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 logging.info("[スキップ] 価格横ばい")
                 await asyncio.sleep(interval_sec)
                 continue
-
+        
+        if adx >= 95:
+            # 無効化（非常事態）
+            shared_state["trend"] = None
+            notify_slack(f"[警告] ADXが100に近いためスキップ（ADX={adx:.2f}）")
+            logging.warning("[スキップ] ADX異常値 → 判定中止")
+            continue
+        elif adx >= 70 and abs(diff) > 0.015 and trend is not None:
+            # クロス不要で許可
+            shared_state["trend"] = trend
+            notify_slack(f"[強トレンド] MACDクロス無視してエントリー（ADX={adx:.2f}, diff={diff:.4f}）")
+            logging.info("[エントリー] ADX強すぎるためクロス無視")
+        
         if rsi < 20:
             shared_state["trend"] = None
             notify_slack(f"[RSI下限] RSI={rsi_str} → 反発警戒でスキップ")
@@ -547,8 +559,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 logging.info("[スキップ] MACDクロスなし")
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         await asyncio.sleep(interval_sec)
-
-
 
 # === 署名作成 ===
 def create_signature(timestamp, method, path, body=""):
