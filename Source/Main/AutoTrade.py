@@ -48,7 +48,8 @@ shared_state = {
     "entry_time":None,
     "loss_streak":None,
     "cooldown_until":None,
-    "vstop_active":False
+    "vstop_active":False,
+    "adx_wait_notice":False
 }
 
 args=sys.argv
@@ -480,7 +481,16 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                continue
         else:
             vstop = 0
-
+        
+        if len(close_prices) < 14:
+            logging.info(f"[情報] ADX計算に必要なデータ不足 ({len(close_prices)}/14)")
+            if not shared_state.get("adx_wait_notice", False):
+                notify_slack("[待機中] ADX計算に必要なデータが不足 → 判定スキップ中")
+                shared_state["adx_wait_notice"] = True
+                await asyncio.sleep(interval_sec)
+            continue
+        else:
+            shared_state["adx_wait_notice"] = False
         macd, signal = calc_macd(close_prices)
         if len(macd) < 2 or len(signal) < 2:
             notify_slack("[注意] MACDが未計算のため判定スキップ中")
