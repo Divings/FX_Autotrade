@@ -401,6 +401,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     last_adx_state = None
     sstop = 0
     vstop = 0
+    nstop = 0
     while not stop_event.is_set():
         if is_market_open() != "OPEN":
             if sstop == 0:
@@ -442,6 +443,18 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         bid = prices["bid"]
         ask = prices["ask"]
         mid = (ask + bid) / 2
+        #MAX_SPREAD = 0.05  # 許容最大スプレッド（例）
+
+        spread = ask - bid
+        if spread > MAX_SPREAD:
+            shared_state["trend"] = None
+            if nstop== 0:
+                notify_slack(f"[スプレッド超過] 現在のスプレッド={spread:.5f} → エントリーをスキップ")
+                logging.warning(f"[スキップ] スプレッドが広すぎるため判定中止（{spread:.5f} > {MAX_SPREAD:.5f}）")
+                nstop = 1
+                continue
+            else:
+                nstop = 0
 
         price_buffer.append(bid)
         high_prices.append(ask)
