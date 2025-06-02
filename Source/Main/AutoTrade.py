@@ -945,7 +945,10 @@ async def auto_trade():
                         shared_state["last_trend"] = None
                         shared_state["entry_time"] = time.time()
             await asyncio.sleep(CHECK_INTERVAL)
-
+    except Exception as e:
+        notify_slack(f"[致命的エラー] auto_trade() にて {type(e).__name__}: {e}")
+        logging.exception("auto_tradeで例外が発生しました")
+        raise  # systemdが再起動してくれるならraiseで良い
     finally:
         stop_event.set()
         trend_task.cancel()
