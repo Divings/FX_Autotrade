@@ -478,8 +478,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                vstop = 1
                await asyncio.sleep(interval_sec)
                continue
-            else:
-                vstop = 0
+        else:
+            vstop = 0
 
         macd, signal = calc_macd(close_prices)
         if len(macd) < 2 or len(signal) < 2:
