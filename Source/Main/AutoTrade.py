@@ -847,7 +847,6 @@ async def auto_trade():
     quit_profit=asyncio.create_task(monitor_quick_profit(shared_state, stop_event))
     quit_profit.add_done_callback(lambda t: notify_slack(f"即時利確関数が終了しました: {t.exception()}"))
     
-    
     try:
         while True:
             if is_market_open() != "OPEN":
@@ -945,7 +944,8 @@ async def auto_trade():
                         shared_state["last_trend"] = None
                         shared_state["entry_time"] = time.time()
             await asyncio.sleep(CHECK_INTERVAL)
-            
+    except SystemExit as e:
+        notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
     except Exception as e:
         notify_slack(f"[致命的エラー] auto_trade() にて {type(e).__name__}: {e}")
         logging.exception("auto_tradeで例外が発生しました")
