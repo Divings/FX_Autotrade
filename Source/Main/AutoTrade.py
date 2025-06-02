@@ -455,6 +455,17 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         short_ma = sum(list(price_buffer)[-short_period:]) / short_period
         long_ma = sum(list(price_buffer)[-long_period:]) / long_period
         diff = short_ma - long_ma
+        
+        if rsi is None or adx is None:
+            shared_state["trend"] = None
+            if not shared_state.get("notified_rsi_adx_none", False):
+                notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
+                logging.warning("[スキップ] RSI/ADXがNone")
+                shared_state["notified_rsi_adx_none"] = True
+            await asyncio.sleep(interval_sec)
+            continue
+        else:
+            shared_state["notified_rsi_adx_none"] = False
 
         try:
             rsi = calculate_rsi(list(price_buffer), period=14)
@@ -469,17 +480,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             shared_state["notified_rsi_adx_error"] = False
-
-        if rsi is None or adx is None:
-            shared_state["trend"] = None
-            if not shared_state.get("notified_rsi_adx_none", False):
-                notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
-                logging.warning("[スキップ] RSI/ADXがNone")
-                shared_state["notified_rsi_adx_none"] = True
-            await asyncio.sleep(interval_sec)
-            continue
-        else:
-            shared_state["notified_rsi_adx_none"] = False
 
         macd, signal = calc_macd(close_prices)
         if len(macd) < 2 or len(signal) < 2:
