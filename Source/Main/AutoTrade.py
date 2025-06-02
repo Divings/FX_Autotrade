@@ -451,7 +451,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.info(f"[待機中] ADX計算用に蓄積中: {len(close_prices)}/28")
             await asyncio.sleep(interval_sec)
             continue
-
+        
         if len(price_buffer) < long_period:
             if not shared_state.get("trend_init_notice"):
                 notify_slack("[MAトレンド判定] データ蓄積中 → 判定保留中")
@@ -513,7 +513,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
 
         logging.info(f"[MACD] クロス判定: UP={macd_cross_up}, DOWN={macd_cross_down}")
-
+        logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         if len(close_prices) >= 5:
             price_range = max(close_prices) - min(close_prices)
             if price_range < 0.03:
@@ -545,7 +545,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend"] = None
                 notify_slack(f"[スキップ] MACDクロス未検出のためスキップ（RSI={rsi_str}, ADX={adx_str}, MACD={macd_str}, Signal={signal_str}）")
                 logging.info("[スキップ] MACDクロスなし")
-
+        logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         await asyncio.sleep(interval_sec)
 
 
