@@ -1,6 +1,7 @@
 # slack_notify.py
 import os
 import requests
+import time
 from dotenv import load_dotenv
 from conf_load import load_settings_from_db
 
@@ -8,9 +9,21 @@ from conf_load import load_settings_from_db
 config1 = load_settings_from_db()
 SLACK_WEBHOOK_URL = config1["SLACK_WEBHOOK_URL"]
 
+# 通知制限管理辞書（メッセージ: 最後に送信した時刻）
+_last_notify_times = {}
+_NOTIFY_COOLDOWN_SECONDS = 60  # 同じ内容は60秒間送らない
+
 def notify_slack(message: str):
     if not SLACK_WEBHOOK_URL:
         raise ValueError("SLACK_WEBHOOK_URL is not set.")
+
+    now = time.time()
+    last_sent = _last_notify_times.get(message)
+    if last_sent and (now - last_sent < _NOTIFY_COOLDOWN_SECONDS):
+        # 通知制限中
+        print(f"[Slack通知制限] メッセージ送信抑制: {message}")
+        return
+    _last_notify_times[message] = now
 
     # メッセージの内容に応じて色を設定
     if "[即時損切]" in message or "[決済] 損切り" in message or "[\u26a0\ufe0fアラート]" in message:
@@ -27,8 +40,8 @@ def notify_slack(message: str):
         color = "#888888"  # グレー（情報）
     else:
         color = "#dddddd"  # 既定（薄グレー）
+
     try:
-        # Slackに通知
         payload = {
             "attachments": [
                 {
