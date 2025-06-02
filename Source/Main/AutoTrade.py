@@ -558,16 +558,19 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             else:
                 # クロス不要で許可
                 shared_state["trend"] = trend
-                notify_slack(f"[強トレンド] MACDクロス無視してエントリー（ADX={adx:.2f}, diff={diff:.4f}）")
+                try:
+                    notify_slack(f"[強トレンド] MACDクロス無視してエントリー（ADX={adx:.2f}, diff={diff:.4f}）")
+                except:
+                    pass
                 logging.info("[エントリー] ADX強すぎるためクロス無視")
-        
+                shared_state["forced_entry_date"] = today_str
+
         if rsi < 20:
             shared_state["trend"] = None
             notify_slack(f"[RSI下限] RSI={rsi_str} → 反発警戒でスキップ")
             logging.info("[スキップ] RSI下限で警戒")
             await asyncio.sleep(interval_sec)
             continue
-
         
         if statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
             trend = "BUY" if diff > 0 else "SELL"
