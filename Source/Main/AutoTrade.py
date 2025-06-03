@@ -946,6 +946,7 @@ async def auto_trade():
             await asyncio.sleep(CHECK_INTERVAL)
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
+        sys.exit()
     except Exception as e:
         notify_slack(f"[致命的エラー] auto_trade() にて {type(e).__name__}: {e}")
         logging.exception("auto_tradeで例外が発生しました")
