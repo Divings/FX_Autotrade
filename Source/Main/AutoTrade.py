@@ -592,7 +592,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             logging.info("[スキップ] ボラティリティ不足")
             shared_state["trend"] = None
-            notify_slack(f"[スキップ] RSI制限のためスキップ（RSI={rsi_str}, trend={trend}）")
+            
             
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         await asyncio.sleep(interval_sec)
