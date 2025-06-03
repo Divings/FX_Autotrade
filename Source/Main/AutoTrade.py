@@ -530,7 +530,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
-
+        rsi_limit = (trend == "BUY" and rsi < 70) or (trend == "SELL" and rsi > 30)
         logging.info(f"[MACD] クロス判定: UP={macd_cross_up}, DOWN={macd_cross_down}")
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         if len(close_prices) >= 5:
@@ -575,7 +575,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         volatility_ok = statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD
         strong_trend = adx > 35 and abs(diff) > 0.015
                 
-        if volatility_ok or strong_trend:
+        if (volatility_ok or strong_trend) and rsi_limit:
             trend = "BUY" if diff > 0 else "SELL"
             if trend == "BUY" and macd_cross_up:
                 shared_state["trend"] = trend
@@ -591,6 +591,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 logging.info("[スキップ] MACDクロスなし")
         else:
             logging.info("[スキップ] ボラティリティ不足")
+            shared_state["trend"] = None
+            notify_slack(f"[スキップ] RSI制限のためスキップ（RSI={rsi_str}, trend={trend}）")
+            
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         await asyncio.sleep(interval_sec)
 
