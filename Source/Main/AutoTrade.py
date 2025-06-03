@@ -574,7 +574,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         volatility_ok = statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD
         strong_trend = adx > 35 and abs(diff) > 0.015
-
+                
         if volatility_ok or strong_trend:
             trend = "BUY" if diff > 0 else "SELL"
             if trend == "BUY" and macd_cross_up:
