@@ -506,6 +506,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                await asyncio.sleep(interval_sec)
                continue
         else:
+            shared_state["RSI"] = rsi
             vstop = 0
         
         if len(close_prices) < 14:
@@ -536,6 +537,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if len(close_prices) >= 5:
             price_range = max(close_prices) - min(close_prices)
             if price_range < 0.03:
+                trend = None
                 shared_state["trend"] = None
                 notify_slack(f"[横ばい判定] 価格変動幅が小さい（{price_range:.4f}）ためスキップ")
                 logging.info("[スキップ] 価格横ばい")
