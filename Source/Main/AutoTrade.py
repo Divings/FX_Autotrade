@@ -60,6 +60,8 @@ file_path = sys.argv[0]  # スクリプトファイルのパス
 folder_path = os.path.dirname(os.path.abspath(file_path))
 os.chdir(folder_path)
 
+session = requests.Session() # セッションを生成
+
 TEST = False # デバッグ用フラグ
 spread_history = deque(maxlen=5)
 
@@ -707,7 +709,7 @@ def open_order(side="BUY"):
 
     try:
         start = time.time()
-        res = requests.post(BASE_URL_FX + path, headers=headers, data=body)
+        res = session.post(BASE_URL_FX + path, headers=headers, data=body,timeout=3)
         end = time.time()
         price = extract_price_from_response(res)
         elapsed = end - start
@@ -725,6 +727,10 @@ def open_order(side="BUY"):
             logging.warning(f"[遅延警告] 新規注文に {elapsed:.2f} 秒かかりました")
 
         return data
+    except requests.exceptions.Timeout:
+        notify_slack("[注文] タイムアウト（3秒）")
+        logging.warning("[タイムアウト] 新規注文が3秒を超えました")
+        return None
     except Exception as e:
         notify_slack(f"[注文] 新規建て失敗: {e}")
         return None
@@ -759,7 +765,7 @@ def close_order(position_id, size, side):
 
     try:
         start = time.time()
-        res = requests.post(BASE_URL_FX + path, headers=headers, data=body)
+        res = session.post(BASE_URL_FX + path, headers=headers, data=body,timeout=3)
         end = time.time()
         price = extract_price_from_response(res)
         elapsed = end - start
@@ -777,6 +783,10 @@ def close_order(position_id, size, side):
             logging.warning(f"[遅延警告] 決済APIに {elapsed:.2f} 秒かかりました")
 
         return data
+    except requests.exceptions.Timeout:
+        notify_slack("[注文] タイムアウト（3秒）")
+        logging.warning("[タイムアウト] 新規注文が3秒を超えました")
+        return None
     except Exception as e:
         notify_slack(f"[決済] 失敗: {e}")
         return None
