@@ -577,12 +577,19 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
                       
         if statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
+            
             trend = "BUY" if diff > 0 else "SELL"
-            if trend == "BUY" and macd_cross_up:
+            if adx < 20:
+                notify_slack(f"[スキップ] ADXが低いためトレンド弱くスキップ（ADX={adx:.2f}）")
+                shared_state["trend"] = None
+                await asyncio.sleep(interval_sec)
+                continue
+            
+            if trend == "BUY" and macd_cross_up and rsi < 70:
                 shared_state["trend"] = trend
                 notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi_str}, ADX={adx_str}）")
                 logging.info("[エントリー判定] BUY トレンド確定")
-            elif trend == "SELL" and macd_cross_down:
+            elif trend == "SELL" and macd_cross_down and adx >= 20 and rsi > 30:
                 shared_state["trend"] = trend
                 notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi_str}, ADX={adx_str}）")
                 logging.info("[エントリー判定] SELL トレンド確定")
