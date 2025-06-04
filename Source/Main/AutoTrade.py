@@ -995,6 +995,8 @@ async def auto_trade():
 if __name__ == "__main__":
     try:
         asyncio.run(auto_trade())
+    except SystemExit as e:
+        notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
     except:
         save_state(shared_state)
         save_price_buffer(price_buffer)

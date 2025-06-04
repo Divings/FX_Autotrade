@@ -1,4 +1,4 @@
 @echo off
 cd /d ./
-pyinstaller Check.spec
+pyinstaller trade_stats_calculator.py --onedir --noconfirm
 pause
