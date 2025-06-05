@@ -904,7 +904,7 @@ async def auto_trade():
     loop = asyncio.get_event_loop()
 
     # 全タスクを登録
-    server_task = loop.create_task(start_socket_server(shared_state))
+    server_task = asyncio.create_task(start_socket_server(shared_state))
     hold_status_task = loop.create_task(monitor_hold_status(shared_state, stop_event, interval_sec=1))
     trend_task = loop.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     loss_cut_task = loop.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
@@ -914,13 +914,13 @@ async def auto_trade():
     trend_task.add_done_callback(lambda t: notify_slack(f"トレンド関数が終了しました: {t.exception()}"))
     quick_profit_task.add_done_callback(lambda t: notify_slack(f"即時利確関数が終了しました: {t.exception()}"))
     # 全てのタスクを待機（終了しない限り常駐）
-    loop.run_until_complete(asyncio.gather(
+    await asyncio.gather(
         server_task,
         hold_status_task,
         trend_task,
         loss_cut_task,
         quick_profit_task
-    ))
+    )
     try:
         while True:
             if is_market_open() != "OPEN":
