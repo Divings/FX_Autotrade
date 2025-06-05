@@ -100,49 +100,6 @@ def setup_logging():
 
 # 最大240本まで保持（例：1分足で4時間分）
 price_history = deque(maxlen=240)
-def validate_candle_shape_from_prices(price_history, trend):
-    """
-    終値の履歴からローソク足を自動算出し、ノイズ足（ヒゲが長く実体が短い）を判定する。
-    
-    Parameters:
-    - price_history: list or deque of float
-        終値の履歴（少なくとも2つ以上必要）
-    - trend: str ("BUY" or "SELL")
-
-    Returns:
-    - trend: str または None（ノイズ足であればNone）
-    """
-
-    if len(price_history) < 2:
-        return trend  # データ不足なら判定しない
-
-    # 直近1本のローソク足を生成（過去4データから）
-    # 終値: 現在
-    current_close = price_history[-1]
-    # 始値: 1本前の足の終値（または指定の範囲平均でもOK）
-    current_open = price_history[-2]
-    # 高値・安値: 過去数本で計算（ここでは直近4本）
-    recent_range = price_history[-4:] if len(price_history) >= 4 else price_history
-    current_high = max(recent_range)
-    current_low = min(recent_range)
-
-    # 実体・ヒゲ長を計算
-    real_body = abs(current_close - current_open)
-    upper_wick = current_high - max(current_close, current_open)
-    lower_wick = min(current_close, current_open) - current_low
-
-    # ノイズ判定（実体が短く、ヒゲが相対的に長い）
-    if trend == "BUY":
-        if real_body < 0.03 and lower_wick > real_body * 2:
-            notify_slack(f"ノイズ判定: BUYエントリー見送り（実体={real_body:.4f}, 下ヒゲ={lower_wick:.4f}）")
-            return None
-
-    elif trend == "SELL":
-        if real_body < 0.03 and upper_wick > real_body * 2:
-            notify_slack(f"ノイズ判定: SELLエントリー見送り（実体={real_body:.4f}, 上ヒゲ={upper_wick:.4f}）")
-            return None
-
-    return trend  # 問題なければそのまま返す
 
 try:
     setup_logging()
@@ -167,7 +124,8 @@ DEFAULT_CONFIG = {
     "MAINTENANCE_MARGIN_RATIO": 0.5,
     "VOL_THRESHOLD": 0.03,
     "TIME_STOP":22,
-    "MACD_DIFF_THRESHOLD":0.002
+    "MACD_DIFF_THRESHOLD":0.002,
+    "SKIP_MODE":0
 }
 
 macd_valid = False
@@ -302,6 +260,7 @@ MAINTENANCE_MARGIN_RATIO = config["MAINTENANCE_MARGIN_RATIO"]
 VOL_THRESHOLD = config["VOL_THRESHOLD"]
 TIME_STOP = config["TIME_STOP"]
 MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
+SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
@@ -411,6 +370,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     sstop = 0
     vstop = 0
     nstop = 0
+
+    if SKIP_MODE == False:
+        notify_slack(f"[INFO] 注意：スキップモードが無効になっています。\n 損失が出る場合があります")
     while not stop_event.is_set():
         
         if is_market_open() != "OPEN":
@@ -469,7 +431,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         bid = prices["bid"]
         ask = prices["ask"]
         mid = (ask + bid) / 2
-        #MAX_SPREAD = 0.05  # 許容最大スプレッド（例）
 
         spread = ask - bid
         if spread > MAX_SPREAD:
@@ -555,10 +516,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         if abs(macd_diff_now) < MACD_DIFF_THRESHOLD:
             if xstop == 0:
-                notify_slack(f"[スキップ] MACDクロスは検出されたが差が小さいためフェイク警戒でスキップ（差分={macd_diff_now:.5f}）")
-                logging.info(f"[スキップ] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
+                notify_slack(f"[INFO] MACDクロスは検出されたが差が小さいためフェイク警戒（差分={macd_diff_now:.5f}）\n 騙しによる損失要注意!!")
+                logging.info(f"[INFO] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
                 xstop = 1
-            continue
+            if SKIP_MODE==True:
+                continue
         else:
             xstop = 0
         
