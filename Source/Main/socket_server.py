@@ -25,7 +25,7 @@ async def handle_client(reader, writer,shared_state=None):
     except Exception as e:
         print(f"[エラー] handle_client: {e}")
 
-async def start_socket_server(shared_state, host='0.0.0.0', port=8888):
+async def start_socket_server(shared_state, host='127.0.0.1', port=8888):
     async def handler(reader, writer):
         await handle_client(reader, writer, shared_state)
 
