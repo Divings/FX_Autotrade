@@ -548,6 +548,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         macd_cross_up = macd[-2] <= signal[-2] and macd[-1] > signal[-1]
         macd_cross_down = macd[-2] >= signal[-2] and macd[-1] < signal[-1]
+        
         # === MACDクロスの差分が小さすぎる場合、フェイク判定でスキップ ===
         macd_diff_now = macd[-1] - signal[-1]
         
@@ -559,6 +560,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             xstop = 0
+        
         # === 傾きチェックを追加 ===
         macd_slope = macd[-1] - macd[-2]
 
