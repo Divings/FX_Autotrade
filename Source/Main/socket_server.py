@@ -21,6 +21,7 @@ async def handle_client(reader, writer,shared_state=None):
 
         writer.write(response.encode())
         await writer.drain()
+        await asyncio.sleep(0.1)
         writer.close()
     except Exception as e:
         print(f"[エラー] handle_client: {e}")
