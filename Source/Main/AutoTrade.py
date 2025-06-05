@@ -519,8 +519,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 notify_slack(f"[INFO] MACDクロスは検出されたが差が小さいためフェイク警戒（差分={macd_diff_now:.5f}）\n 騙しによる損失要注意!!")
                 logging.info(f"[INFO] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
                 xstop = 1
-            if SKIP_MODE==True:
-                continue
+                if SKIP_MODE==True:
+                    continue
         else:
             xstop = 0
         
