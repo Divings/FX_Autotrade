@@ -164,7 +164,8 @@ DEFAULT_CONFIG = {
     "CHECK_INTERVAL": 3,
     "MAINTENANCE_MARGIN_RATIO": 0.5,
     "VOL_THRESHOLD": 0.03,
-    "TIME_STOP":22
+    "TIME_STOP":22,
+    "MACD_DIFF_THRESHOLD":0.002
 }
 
 macd_valid = False
@@ -298,7 +299,7 @@ CHECK_INTERVAL = config["CHECK_INTERVAL"]
 MAINTENANCE_MARGIN_RATIO = config["MAINTENANCE_MARGIN_RATIO"]
 VOL_THRESHOLD = config["VOL_THRESHOLD"]
 TIME_STOP = config["TIME_STOP"]
-
+MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
         return False
@@ -538,6 +539,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         macd_cross_up = macd[-2] <= signal[-2] and macd[-1] > signal[-1]
         macd_cross_down = macd[-2] >= signal[-2] and macd[-1] < signal[-1]
+        # === MACDクロスの差分が小さすぎる場合、フェイク判定でスキップ ===
+        macd_diff_now = macd[-1] - signal[-1]
+        if abs(macd_diff_now) < MACD_DIFF_THRESHOLD:
+            notify_slack(f"[スキップ] MACDクロスは検出されたが差が小さいためフェイク警戒でスキップ（差分={macd_diff_now:.5f}）")
+            logging.info(f"[スキップ] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
+            continue
 
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
