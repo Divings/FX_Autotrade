@@ -163,7 +163,8 @@ DEFAULT_CONFIG = {
     "MIN_PROFIT": 40,
     "CHECK_INTERVAL": 3,
     "MAINTENANCE_MARGIN_RATIO": 0.5,
-    "VOL_THRESHOLD": 0.03
+    "VOL_THRESHOLD": 0.03,
+    "TIME_STOP":22
 }
 
 macd_valid = False
@@ -296,7 +297,7 @@ MIN_PROFIT = config["MIN_PROFIT"]
 CHECK_INTERVAL = config["CHECK_INTERVAL"]
 MAINTENANCE_MARGIN_RATIO = config["MAINTENANCE_MARGIN_RATIO"]
 VOL_THRESHOLD = config["VOL_THRESHOLD"]
-TIME_STOP = int(config["TIME_STOP"])
+TIME_STOP = config["TIME_STOP"]
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
