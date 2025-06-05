@@ -411,6 +411,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     vstop = 0
     nstop = 0
     while not stop_event.is_set():
+        
         if is_market_open() != "OPEN":
             if sstop == 0:
                 notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
@@ -419,7 +420,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             await asyncio.sleep(interval_sec)
             continue
         sstop = 0
-
+        if shared_state.get("cmd") == "save_adx":
+            if len(high_prices) > 28 or len(low_prices) > 28 or len(close_prices) > 28:
+                save_price_history(list(high_prices), list(low_prices), list(close_prices))
+                notify_slack("[保存] 外部コマンドによりADX蓄積データを保存しました")
+                shared_state["cmd"] = None  # フラグをリセット
+            else:
+                notify_slack("[保存スキップ] 外部コマンドによりADX蓄積データを要求されましたが、データ不足です")
         in_cd, remaining = is_in_cooldown(shared_state)
         if in_cd:
             if not shared_state.get("notified_cooldown", False):
