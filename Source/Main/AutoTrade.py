@@ -154,7 +154,7 @@ notify_slack("自動売買システム起動")
 shared_state = load_state()
 price_buffer = load_price_buffer()
 
-LOG_FILE = "fx_trade_log.csv"
+# LOG_FILE = "fx_trade_log.csv"
 LOSS_STREAK_THRESHOLD = 3
 COOLDOWN_DURATION_SEC = 180  # 3分間
 
@@ -302,6 +302,7 @@ MAINTENANCE_MARGIN_RATIO = config["MAINTENANCE_MARGIN_RATIO"]
 VOL_THRESHOLD = config["VOL_THRESHOLD"]
 TIME_STOP = config["TIME_STOP"]
 MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
+
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
         return False
@@ -1038,7 +1039,7 @@ async def auto_trade():
         stop_event.set()
         trend_task.cancel()
         loss_cut_task.cancel()
-        quit_profit.cancel()
+        quick_profit_task.cancel()
         hold_status_task.cancel()
         try:
             await hold_status_task
@@ -1053,7 +1054,7 @@ async def auto_trade():
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_positions_fast タスク終了")
         try:
-            await quit_profit
+            await quick_profit_task
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_quick_profit タスク終了")
 if __name__ == "__main__":
