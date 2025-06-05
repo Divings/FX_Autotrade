@@ -400,7 +400,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     # price_buffer = deque(maxlen=240)
 
     high_prices, low_prices, close_prices = load_price_history()
-
+    xstop = 0
     trend = None
     
     last_rsi_state = None
@@ -541,10 +541,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         macd_cross_down = macd[-2] >= signal[-2] and macd[-1] < signal[-1]
         # === MACDクロスの差分が小さすぎる場合、フェイク判定でスキップ ===
         macd_diff_now = macd[-1] - signal[-1]
+        
         if abs(macd_diff_now) < MACD_DIFF_THRESHOLD:
-            notify_slack(f"[スキップ] MACDクロスは検出されたが差が小さいためフェイク警戒でスキップ（差分={macd_diff_now:.5f}）")
-            logging.info(f"[スキップ] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
+            if xstop == 0:
+                notify_slack(f"[スキップ] MACDクロスは検出されたが差が小さいためフェイク警戒でスキップ（差分={macd_diff_now:.5f}）")
+                logging.info(f"[スキップ] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
+                xstop = 1
             continue
+        else:
+            xstop = 0
 
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
