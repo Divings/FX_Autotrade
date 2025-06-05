@@ -432,8 +432,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         now = datetime.now()
         if now.hour >= TIME_STOP or now.hour < 6:
             if not shared_state.get("vstop_active", False):
-                notify_slack(f"[クールダウン] 22時以降のため自動売買スキップ")
-                logging.info("[時間制限] 22時以降の取引スキップ")
+                notify_slack(f"[クールダウン] {str(TIME_STOP)}時以降のため自動売買スキップ")
+                logging.info(f"[時間制限] {str(TIME_STOP)}時以降の取引スキップ")
                 shared_state["vstop_active"] = True
                 if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
                     pass
