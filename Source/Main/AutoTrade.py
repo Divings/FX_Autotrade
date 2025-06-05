@@ -296,6 +296,7 @@ MIN_PROFIT = config["MIN_PROFIT"]
 CHECK_INTERVAL = config["CHECK_INTERVAL"]
 MAINTENANCE_MARGIN_RATIO = config["MAINTENANCE_MARGIN_RATIO"]
 VOL_THRESHOLD = config["VOL_THRESHOLD"]
+TIME_STOP = int(config["TIME_STOP"])
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
@@ -428,7 +429,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         prices = get_price()
         now = datetime.now()
-        if now.hour >= 22 or now.hour < 6:
+        if now.hour >= TIME_STOP or now.hour < 6:
             if not shared_state.get("vstop_active", False):
                 notify_slack(f"[クールダウン] 22時以降のため自動売買スキップ")
                 logging.info("[時間制限] 22時以降の取引スキップ")
