@@ -523,19 +523,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         # === 傾きチェックを追加 ===
         macd_slope = macd[-1] - macd[-2]
-
-        # 買いサインなのにMACDが下向き → 矛盾
-        if macd_cross_up and macd_slope < 0:
-            notify_slack("[スキップ] MACDクロスBUY検出だがMACDが下向き（slope<0）→ フェイク警戒でスキップ")
-            logging.info(f"[スキップ] クロスBUYだけど傾き下向き: slope={macd_slope:.5f}")
-            continue
-
-        # 売りサインなのにMACDが上向き → 矛盾
-        if macd_cross_down and macd_slope > 0:
-            notify_slack("[スキップ] MACDクロスSELL検出だがMACDが上向き（slope>0）→ フェイク警戒でスキップ")
-            logging.info(f"[スキップ] クロスSELLだけど傾き上向き: slope={macd_slope:.5f}")
-            continue
-        
+     
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
         rsi_limit = (trend == "BUY" and rsi < 70) or (trend == "SELL" and rsi > 30)
