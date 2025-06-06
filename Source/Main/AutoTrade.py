@@ -521,6 +521,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 logging.info(f"[INFO] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
                 xstop = 1
                 if SKIP_MODE==True:
+                    notify_slack(f"スキップモードでスキップされました")
                     continue
         else:
             xstop = 0
