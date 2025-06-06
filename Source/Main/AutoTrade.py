@@ -355,6 +355,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     import statistics
     from collections import deque
     from datetime import datetime
+    from datetime import date
     import time
     import logging
 
@@ -363,8 +364,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
-    trend = shared_state["trend"]
-    
+    try:
+        trend = shared_state["trend"]
+    except:
+        tremd = None
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
@@ -372,7 +375,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     nstop = 0
 
     while not stop_event.is_set():
-        today = datetime.date.today()
+        today = datetime.now()
         weekday_number = today.weekday()
         if is_market_open() != "OPEN" or weekday_number==6 or weekday_number==5:
             if sstop == 0:
