@@ -375,9 +375,19 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     nstop = 0
 
     while not stop_event.is_set():
+        
+        if shared_state.get("cmd") == "save_adx":
+            if len(high_prices) > 28 or len(low_prices) > 28 or len(close_prices) > 28:
+                save_price_history(list(high_prices), list(low_prices), list(close_prices))
+                notify_slack("[保存] 外部コマンドによりADX蓄積データを保存しました")
+                shared_state["cmd"] = None  # フラグをリセット
+            else:
+                notify_slack("[保存スキップ] 外部コマンドによりADX蓄積データを要求されましたが、データ不足です")
+                shared_state["cmd"] = None
+
         today = datetime.now()
         weekday_number = today.weekday()
-        if is_market_open() != "OPEN" or weekday_number==6 or weekday_number==5:
+        if is_market_open() != "OPEN" or weekday_number == 6 or weekday_number == 5:
             if sstop == 0:
                 notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
                 logging.info("[市場] 市場が閉場中")
@@ -390,15 +400,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 price_buffer.clear()
                 shared_state["price_reset_done"] = True
             continue
-        
         sstop = 0
-        if shared_state.get("cmd") == "save_adx":
-            if len(high_prices) > 28 or len(low_prices) > 28 or len(close_prices) > 28:
-                save_price_history(list(high_prices), list(low_prices), list(close_prices))
-                notify_slack("[保存] 外部コマンドによりADX蓄積データを保存しました")
-                shared_state["cmd"] = None  # フラグをリセット
-            else:
-                notify_slack("[保存スキップ] 外部コマンドによりADX蓄積データを要求されましたが、データ不足です")
         in_cd, remaining = is_in_cooldown(shared_state)
         if in_cd:
             if not shared_state.get("notified_cooldown", False):
@@ -520,21 +522,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         macd_cross_up = macd[-2] <= signal[-2] and macd[-1] > signal[-1]
         macd_cross_down = macd[-2] >= signal[-2] and macd[-1] < signal[-1]
-        
-        # === MACDクロスの差分が小さすぎる場合、フェイク判定でスキップ ===
-        macd_diff_now = macd[-1] - signal[-1]
-        
-        if abs(macd_diff_now) < MACD_DIFF_THRESHOLD:
-            if xstop == 0:
-                notify_slack(f"[INFO] MACDクロスは検出されたが差が小さいためフェイク警戒（差分={macd_diff_now:.5f}）\n 騙しによる損失要注意!!")
-                logging.info(f"[INFO] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
-                xstop = 1
-        else:
-            xstop = 0
-        
-        # === 傾きチェックを追加 ===
-        macd_slope = macd[-1] - macd[-2]
-     
+            
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
         rsi_limit = (trend == "BUY" and rsi < 70) or (trend == "SELL" and rsi > 30)
