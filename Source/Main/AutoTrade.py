@@ -372,14 +372,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     nstop = 0
 
     while not stop_event.is_set():
-        
-        if is_market_open() != "OPEN":
+        today = datetime.date.today()
+        weekday_number = today.weekday()
+        if is_market_open() != "OPEN" or weekday_number==6 or weekday_number==5:
             if sstop == 0:
                 notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
                 logging.info("[市場] 市場が閉場中")
                 sstop = 1
             await asyncio.sleep(interval_sec)
+            if weekday_number == 6:
+                high_prices.clear()
+                low_prices.clear()
+                close_prices.clear()
+                price_buffer.clear()
+                shared_state["price_reset_done"] = True
             continue
+        
         sstop = 0
         if shared_state.get("cmd") == "save_adx":
             if len(high_prices) > 28 or len(low_prices) > 28 or len(close_prices) > 28:
