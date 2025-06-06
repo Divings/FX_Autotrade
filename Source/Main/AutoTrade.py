@@ -371,8 +371,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     vstop = 0
     nstop = 0
 
-    if SKIP_MODE == False:
-        notify_slack(f"[INFO] 注意：スキップモードが無効になっています。\n 損失が出る場合があります")
     while not stop_event.is_set():
         
         if is_market_open() != "OPEN":
@@ -520,9 +518,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 notify_slack(f"[INFO] MACDクロスは検出されたが差が小さいためフェイク警戒（差分={macd_diff_now:.5f}）\n 騙しによる損失要注意!!")
                 logging.info(f"[INFO] MACD差分が閾値未満 → クロス弱すぎ: {macd_diff_now:.5f}")
                 xstop = 1
-                if SKIP_MODE==True:
-                    notify_slack(f"スキップモードでスキップされました")
-                    continue
         else:
             xstop = 0
         
@@ -541,7 +536,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.info(f"[スキップ] クロスSELLだけど傾き上向き: slope={macd_slope:.5f}")
             continue
         
-
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
         rsi_limit = (trend == "BUY" and rsi < 70) or (trend == "SELL" and rsi > 30)
