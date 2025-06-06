@@ -367,7 +367,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     try:
         trend = shared_state["trend"]
     except:
-        tremd = None
+        trend = None
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
