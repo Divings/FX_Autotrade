@@ -5,6 +5,18 @@ import time
 from dotenv import load_dotenv
 from conf_load import load_settings_from_db
 
+import configparser
+
+def load_config():
+    # ConfigParser オブジェクトを作成
+    config = configparser.ConfigParser()
+
+    # config.ini を読み込む
+    config.read('config.ini')
+    debug = config.getboolean('settings', 'debug')
+    return debug
+
+debug=load_config()
 # 設定をDBから読み込む
 config1 = load_settings_from_db()
 SLACK_WEBHOOK_URL = config1["SLACK_WEBHOOK_URL"]
@@ -40,7 +52,8 @@ def notify_slack(message: str):
         color = "#888888"  # グレー（情報）
     else:
         color = "#dddddd"  # 既定（薄グレー）
-
+    if debug==True:
+        message= "[Debug モード] " + message
     try:
         payload = {
             "attachments": [
