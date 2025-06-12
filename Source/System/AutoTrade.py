@@ -476,7 +476,7 @@ def open_order(side="BUY"):
         # 成功・失敗判定と詳細通知
         if res.status_code == 200 and "data" in data:
             #price = data["data"].get("price", "取得不可")
-            notify_slack(f"[注文] 新規建て成功: {side}（約定価格: {price}）")
+            notify_slack(f"[注文] 新規建て成功 {side}")
         else:
             notify_slack(f"[注文] 新規建て応答異常: {res.status_code} {data}")
 
@@ -532,7 +532,7 @@ def close_order(position_id, size, side):
         # 成功応答かチェック
         if res.status_code == 200 and "data" in data:
             # price = data["data"].get("price", "取得不可")
-            notify_slack(f"[決済] 成功: {side}（約定価格: {price}）")
+            notify_slack(f"[決済] 成功: {side}")
         else:
             notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
 
@@ -783,6 +783,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     notify_slack(f"[強トレンド] MACDクロス無視してエントリー（ADX={adx:.2f}, diff={diff:.4f}）")
                 except:
                     pass
+                notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
+                a=first_oder(trend,shared_state)
+                if a==2:
+                    logging.info(f"[結果] {trend} すでにポジションあり")
+                elif a==1:
+                    logging.info(f"[結果] {trend} 成功")
+                else:
+                    logging.error(f"[結果] {trend} 失敗")
                 logging.info("[エントリー] ADX強すぎるためクロス無視")
                 shared_state["forced_entry_date"] = today_str
 
