@@ -809,9 +809,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
             if "trend_start_time" in shared_state:
                 elapsed = (now - shared_state["trend_start_time"]).total_seconds() / 60.0
-            if elapsed < TREND_HOLD_MINUTES:
-                trend_active = True
-                logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
+                if elapsed < TREND_HOLD_MINUTES:
+                    trend_active = True
+                    logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
 
 
             if trend == "BUY" and macd_cross_up and rsi < 70 and adx >= 20:
