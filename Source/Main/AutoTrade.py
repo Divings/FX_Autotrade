@@ -814,7 +814,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
 
 
-            if trend == "BUY" and macd_cross_up and rsi < 70:
+            if trend == "BUY" and macd_cross_up and rsi < 70 and adx >= 20:
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.datetime.now()
                 notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi_str}, ADX={adx_str}）")
