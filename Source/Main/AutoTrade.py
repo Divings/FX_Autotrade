@@ -700,6 +700,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         short_ma = sum(list(price_buffer)[-short_period:]) / short_period
         long_ma = sum(list(price_buffer)[-long_period:]) / long_period
+        
+        sma_cross_up = short_ma > long_ma and shared_state.get("last_short_ma", 0) <= shared_state.get("last_long_ma", 0)
+        sma_cross_down = short_ma < long_ma and shared_state.get("last_short_ma", 0) >= shared_state.get("last_long_ma", 0)
+        
+        shared_state["last_short_ma"] = short_ma
+        shared_state["last_long_ma"] = long_ma
+        
         diff = short_ma - long_ma
         
         try:
@@ -822,7 +829,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
 
 
-            if trend == "BUY" and macd_cross_up and rsi < 70 and adx >= 20:
+            if trend == "BUY" and macd_cross_up and sma_cross_up and rsi < 70 and adx >= 20:
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi_str}, ADX={adx_str}）")
@@ -834,7 +841,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 else:
                     logging.error("[結果] BUY 失敗")
                 logging.info("[エントリー判定] BUY トレンド確定")
-            elif trend == "SELL" and macd_cross_down and adx >= 20 and rsi > 30:
+            elif trend == "SELL" and macd_cross_down and macd_cross_down and adx >= 20 and rsi > 30:
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi_str}, ADX={adx_str}）")
