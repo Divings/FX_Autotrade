@@ -54,7 +54,8 @@ shared_state = {
     "vstop_active":False,
     "adx_wait_notice":False,
     "forced_entry_date":False,
-    "cmd":None
+    "cmd":None,
+    "trend_start_time":None
 }
 
 args=sys.argv
@@ -350,6 +351,230 @@ def calculate_adx(highs, lows, closes, period=14):
 
 macd_valid = False
 
+# === 署名作成 ===
+def create_signature(timestamp, method, path, body=""):
+    message = timestamp + method + path + body
+    return hmac.new(API_SECRET.encode(), message.encode(), hashlib.sha256).hexdigest()
+
+# === 営業状態チェック ===
+def is_market_open():
+    try:
+        response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
+        response.raise_for_status()
+        status = response.json().get("data", {}).get("status")
+        # notify_slack(f"[市場] ステータス: {status}")
+        return status
+    except Exception as e:
+        logging.error(f"[市場] 状態取得失敗: {e}")
+        return False
+
+# === 建玉取得 ===
+def get_positions():
+    path = "/v1/openPositions"
+    method = "GET"
+    timestamp = str(int(time.time() * 1000))
+    sign = create_signature(timestamp, method, path)
+
+    headers = {
+        "API-KEY": API_KEY,
+        "API-TIMESTAMP": timestamp,
+        "API-SIGN": sign,
+    }
+
+    try:
+        res = requests.get(BASE_URL_FX + path, headers=headers)
+        res.raise_for_status()
+        data = res.json().get("data", {})
+
+        positions = data.get("list", [])
+        if not isinstance(positions, list):
+            logging.warning(f"[建玉] list が見つからない: {data}")
+            return []
+
+        return [p for p in positions if p.get("symbol") == SYMBOL]
+    except Exception as e:
+        logging.error(f"[建玉] 取得失敗: {e}")
+        return []
+
+# === 証拠金維持率取得 ===
+def get_margin_status(shared_state):
+    path = "/v1/account/assets"
+    method = "GET"
+    timestamp = str(int(time.time() * 1000))
+    sign = create_signature(timestamp, method, path)
+
+    headers = {
+        "API-KEY": API_KEY,
+        "API-TIMESTAMP": timestamp,
+        "API-SIGN": sign
+    }
+
+    try:
+        res = requests.get(BASE_URL_FX + path, headers=headers)
+        res.raise_for_status()
+        data = res.json().get("data", {})
+        ratio_raw = data.get("marginRatio")
+
+        if ratio_raw is None or ratio_raw == 0 or float(ratio_raw) > 1e6:
+            if shared_state.get("last_margin_notify") != "none":
+                notify_slack("[証拠金維持率] ポジションが存在しないため未算出です。※現在0またはNone")
+                shared_state["last_margin_notify"] = "none"
+            return
+
+        ratio = float(ratio_raw)
+
+        # 差分が大きい時だけ通知
+        last_ratio = shared_state.get("last_margin_ratio")
+        if last_ratio is None or abs(ratio - last_ratio) > 1.0:
+            notify_slack(f"[証拠金維持率] {ratio:.2f}%")
+            shared_state["last_margin_ratio"] = ratio
+            shared_state["last_margin_notify"] = "ok"
+
+        # 危険水準通知も重複制御
+        if ratio < MAINTENANCE_MARGIN_RATIO * 100:
+            if shared_state.get("margin_alert_sent") != True:
+                notify_slack("[⚠️アラート] 証拠金維持率が危険水準")
+                shared_state["margin_alert_sent"] = True
+        else:
+            shared_state["margin_alert_sent"] = False
+
+    except Exception as e:
+        notify_slack(f"[証拠金] 取得失敗: {e}")
+
+# === 注文発行 ===
+def open_order(side="BUY"):
+    path = "/v1/order"
+    method = "POST"
+    timestamp = str(int(time.time() * 1000))  # より正確なミリ秒
+
+    body_dict = {
+        "symbol": SYMBOL,
+        "side": side,
+        "executionType": "MARKET",
+        "size": str(LOT_SIZE),
+        "symbolType": "FOREX"
+    }
+
+    body = json.dumps(body_dict, separators=(',', ':'))
+    sign = create_signature(timestamp, method, path, body)
+
+    headers = {
+        "API-KEY": API_KEY,
+        "API-TIMESTAMP": timestamp,
+        "API-SIGN": sign,
+        "Content-Type": "application/json"
+    }
+
+    try:
+        start = time.time()
+        res = session.post(BASE_URL_FX + path, headers=headers, data=body,timeout=3)
+        end = time.time()
+        price = extract_price_from_response(res)
+        elapsed = end - start
+        data = res.json()
+
+        # 成功・失敗判定と詳細通知
+        if res.status_code == 200 and "data" in data:
+            #price = data["data"].get("price", "取得不可")
+            notify_slack(f"[注文] 新規建て成功: {side}（約定価格: {price}）")
+        else:
+            notify_slack(f"[注文] 新規建て応答異常: {res.status_code} {data}")
+
+        # 遅延が0.5秒超えたら警告
+        if elapsed > 0.5:
+            logging.warning(f"[遅延警告] 新規注文に {elapsed:.2f} 秒かかりました")
+
+        return data
+    except requests.exceptions.Timeout:
+        notify_slack("[注文] タイムアウト（3秒）")
+        logging.warning("[タイムアウト] 新規注文が3秒を超えました")
+        return None
+    except Exception as e:
+        notify_slack(f"[注文] 新規建て失敗: {e}")
+        return None
+
+# === ポジション決済 ===
+def close_order(position_id, size, side):
+    path = "/v1/closeOrder"
+    method = "POST"
+    timestamp = str(int(time.time() * 1000))  # より精度の高いミリ秒
+
+    body_dict = {
+        "symbol": SYMBOL,
+        "side": side,
+        "executionType": "MARKET",
+        "settlePosition": [
+            {
+                "positionId": position_id,
+                "size": str(size)
+            }
+        ]
+    }
+
+    body = json.dumps(body_dict, separators=(',', ':'))
+    sign = create_signature(timestamp, method, path, body)
+
+    headers = {
+        "API-KEY": API_KEY,
+        "API-TIMESTAMP": timestamp,
+        "API-SIGN": sign,
+        "Content-Type": "application/json"
+    }
+
+    try:
+        start = time.time()
+        res = session.post(BASE_URL_FX + path, headers=headers, data=body,timeout=3)
+        end = time.time()
+        price = extract_price_from_response(res)
+        elapsed = end - start
+        data = res.json()
+
+        # 成功応答かチェック
+        if res.status_code == 200 and "data" in data:
+            # price = data["data"].get("price", "取得不可")
+            notify_slack(f"[決済] 成功: {side}（約定価格: {price}）")
+        else:
+            notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
+
+        # 遅延が長い場合ログ記録
+        if elapsed > 0.5:
+            logging.warning(f"[遅延警告] 決済APIに {elapsed:.2f} 秒かかりました")
+
+        return data
+    except requests.exceptions.Timeout:
+        notify_slack("[注文] タイムアウト（3秒）")
+        logging.warning("[タイムアウト] 新規注文が3秒を超えました")
+        return None
+    except Exception as e:
+        notify_slack(f"[決済] 失敗: {e}")
+        return None
+
+
+def first_oder(trend,shared_state=None):
+    positions = get_positions()
+    prices = get_price()
+    if prices is None:
+        return 0
+    
+    bid = prices["bid"]
+    ask = prices["ask"]
+    
+    if not positions:
+        if trend is None:
+           return 0
+        else:
+            notify_slack(f"[建玉] なし → 新規{trend}")
+            try:
+                open_order(trend)
+                shared_state["entry_time"] = time.time()
+                write_log(trend, ask)
+                return 1
+            except Exception as e:
+                notify_slack(f"[注文失敗] {e}")
+                return 0
+    else:
+        return 2
+
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     import statistics
@@ -577,13 +802,42 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 await asyncio.sleep(interval_sec)
                 continue
             
+            TREND_HOLD_MINUTES = 15  # 任意の継続時間
+
+            now = datetime.datetime.now()
+            trend_active = False
+
+            if "trend_start_time" in shared_state:
+                elapsed = (now - shared_state["trend_start_time"]).total_seconds() / 60.0
+            if elapsed < TREND_HOLD_MINUTES:
+                trend_active = True
+                logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
+
+
             if trend == "BUY" and macd_cross_up and rsi < 70:
                 shared_state["trend"] = trend
+                shared_state["trend_start_time"] = datetime.datetime.now()
                 notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi_str}, ADX={adx_str}）")
+                a=first_oder(trend,shared_state)
+                if a==2:
+                    logging.info("[結果] BUY すでにポジションあり")
+                elif a==1:
+                    logging.info("[結果] BUY 成功")
+                else:
+                    logging.error("[結果] BUY 失敗")
                 logging.info("[エントリー判定] BUY トレンド確定")
             elif trend == "SELL" and macd_cross_down and adx >= 20 and rsi > 30:
                 shared_state["trend"] = trend
+                shared_state["trend_start_time"] = datetime.datetime.now()
                 notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi_str}, ADX={adx_str}）")
+                a=first_oder(trend,shared_state)
+                if a==2:
+                    logging.info("[結果] SELL すでにポジションあり")
+                elif a==1:
+                    logging.info("[結果] SELL 成功")
+                else:
+                    
+                    logging.error("[結果] SELL 失敗")
                 logging.info("[エントリー判定] SELL トレンド確定")
             else:
                 shared_state["trend"] = None
@@ -596,204 +850,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             notify_slack("[保存] 外部コマンドによりADX蓄積データを保存しました")
             shared_state["cmd"] = None  # フラグをリセット
         await asyncio.sleep(interval_sec)
-
-# === 署名作成 ===
-def create_signature(timestamp, method, path, body=""):
-    message = timestamp + method + path + body
-    return hmac.new(API_SECRET.encode(), message.encode(), hashlib.sha256).hexdigest()
-
-# === 営業状態チェック ===
-def is_market_open():
-    try:
-        response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
-        response.raise_for_status()
-        status = response.json().get("data", {}).get("status")
-        # notify_slack(f"[市場] ステータス: {status}")
-        return status
-    except Exception as e:
-        logging.error(f"[市場] 状態取得失敗: {e}")
-        return False
-
-# === 建玉取得 ===
-def get_positions():
-    path = "/v1/openPositions"
-    method = "GET"
-    timestamp = str(int(time.time() * 1000))
-    sign = create_signature(timestamp, method, path)
-
-    headers = {
-        "API-KEY": API_KEY,
-        "API-TIMESTAMP": timestamp,
-        "API-SIGN": sign,
-    }
-
-    try:
-        res = requests.get(BASE_URL_FX + path, headers=headers)
-        res.raise_for_status()
-        data = res.json().get("data", {})
-
-        positions = data.get("list", [])
-        if not isinstance(positions, list):
-            logging.warning(f"[建玉] list が見つからない: {data}")
-            return []
-
-        return [p for p in positions if p.get("symbol") == SYMBOL]
-    except Exception as e:
-        logging.error(f"[建玉] 取得失敗: {e}")
-        return []
-
-# === 証拠金維持率取得 ===
-def get_margin_status(shared_state):
-    path = "/v1/account/assets"
-    method = "GET"
-    timestamp = str(int(time.time() * 1000))
-    sign = create_signature(timestamp, method, path)
-
-    headers = {
-        "API-KEY": API_KEY,
-        "API-TIMESTAMP": timestamp,
-        "API-SIGN": sign
-    }
-
-    try:
-        res = requests.get(BASE_URL_FX + path, headers=headers)
-        res.raise_for_status()
-        data = res.json().get("data", {})
-        ratio_raw = data.get("marginRatio")
-
-        if ratio_raw is None or ratio_raw == 0 or float(ratio_raw) > 1e6:
-            if shared_state.get("last_margin_notify") != "none":
-                notify_slack("[証拠金維持率] ポジションが存在しないため未算出です。※現在0またはNone")
-                shared_state["last_margin_notify"] = "none"
-            return
-
-        ratio = float(ratio_raw)
-
-        # 差分が大きい時だけ通知
-        last_ratio = shared_state.get("last_margin_ratio")
-        if last_ratio is None or abs(ratio - last_ratio) > 1.0:
-            notify_slack(f"[証拠金維持率] {ratio:.2f}%")
-            shared_state["last_margin_ratio"] = ratio
-            shared_state["last_margin_notify"] = "ok"
-
-        # 危険水準通知も重複制御
-        if ratio < MAINTENANCE_MARGIN_RATIO * 100:
-            if shared_state.get("margin_alert_sent") != True:
-                notify_slack("[⚠️アラート] 証拠金維持率が危険水準")
-                shared_state["margin_alert_sent"] = True
-        else:
-            shared_state["margin_alert_sent"] = False
-
-    except Exception as e:
-        notify_slack(f"[証拠金] 取得失敗: {e}")
-
-# === 注文発行 ===
-def open_order(side="BUY"):
-    path = "/v1/order"
-    method = "POST"
-    timestamp = str(int(time.time() * 1000))  # より正確なミリ秒
-
-    body_dict = {
-        "symbol": SYMBOL,
-        "side": side,
-        "executionType": "MARKET",
-        "size": str(LOT_SIZE),
-        "symbolType": "FOREX"
-    }
-
-    body = json.dumps(body_dict, separators=(',', ':'))
-    sign = create_signature(timestamp, method, path, body)
-
-    headers = {
-        "API-KEY": API_KEY,
-        "API-TIMESTAMP": timestamp,
-        "API-SIGN": sign,
-        "Content-Type": "application/json"
-    }
-
-    try:
-        start = time.time()
-        res = session.post(BASE_URL_FX + path, headers=headers, data=body,timeout=3)
-        end = time.time()
-        price = extract_price_from_response(res)
-        elapsed = end - start
-        data = res.json()
-
-        # 成功・失敗判定と詳細通知
-        if res.status_code == 200 and "data" in data:
-            #price = data["data"].get("price", "取得不可")
-            notify_slack(f"[注文] 新規建て成功: {side}（約定価格: {price}）")
-        else:
-            notify_slack(f"[注文] 新規建て応答異常: {res.status_code} {data}")
-
-        # 遅延が0.5秒超えたら警告
-        if elapsed > 0.5:
-            logging.warning(f"[遅延警告] 新規注文に {elapsed:.2f} 秒かかりました")
-
-        return data
-    except requests.exceptions.Timeout:
-        notify_slack("[注文] タイムアウト（3秒）")
-        logging.warning("[タイムアウト] 新規注文が3秒を超えました")
-        return None
-    except Exception as e:
-        notify_slack(f"[注文] 新規建て失敗: {e}")
-        return None
-
-# === ポジション決済 ===
-def close_order(position_id, size, side):
-    path = "/v1/closeOrder"
-    method = "POST"
-    timestamp = str(int(time.time() * 1000))  # より精度の高いミリ秒
-
-    body_dict = {
-        "symbol": SYMBOL,
-        "side": side,
-        "executionType": "MARKET",
-        "settlePosition": [
-            {
-                "positionId": position_id,
-                "size": str(size)
-            }
-        ]
-    }
-
-    body = json.dumps(body_dict, separators=(',', ':'))
-    sign = create_signature(timestamp, method, path, body)
-
-    headers = {
-        "API-KEY": API_KEY,
-        "API-TIMESTAMP": timestamp,
-        "API-SIGN": sign,
-        "Content-Type": "application/json"
-    }
-
-    try:
-        start = time.time()
-        res = session.post(BASE_URL_FX + path, headers=headers, data=body,timeout=3)
-        end = time.time()
-        price = extract_price_from_response(res)
-        elapsed = end - start
-        data = res.json()
-
-        # 成功応答かチェック
-        if res.status_code == 200 and "data" in data:
-            # price = data["data"].get("price", "取得不可")
-            notify_slack(f"[決済] 成功: {side}（約定価格: {price}）")
-        else:
-            notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
-
-        # 遅延が長い場合ログ記録
-        if elapsed > 0.5:
-            logging.warning(f"[遅延警告] 決済APIに {elapsed:.2f} 秒かかりました")
-
-        return data
-    except requests.exceptions.Timeout:
-        notify_slack("[注文] タイムアウト（3秒）")
-        logging.warning("[タイムアウト] 新規注文が3秒を超えました")
-        return None
-    except Exception as e:
-        notify_slack(f"[決済] 失敗: {e}")
-        return None
 
 # == 即時利確監視用タスク ==
 async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
@@ -907,22 +963,7 @@ async def auto_trade():
 
             trend = shared_state.get("trend")
             
-            if not positions:
-                trend = shared_state.get("trend")
-                
-                if trend is None:
-                    await asyncio.sleep(CHECK_INTERVAL)
-                    continue
-                else:
-                    notify_slack(f"[建玉] なし → 新規{trend}")
-                    try:
-                        open_order(trend)
-                        shared_state["entry_time"] = time.time()
-                        write_log(trend, ask)
-                    except Exception as e:
-                        notify_slack(f"[注文失敗] {e}")
-
-            else:
+            if positions:
                 for pos in positions:
                     entry = float(pos["price"])
                     pid = pos["positionId"]
