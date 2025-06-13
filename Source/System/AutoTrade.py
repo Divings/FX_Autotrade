@@ -558,7 +558,10 @@ def first_oder(trend,shared_state=None):
     
     bid = prices["bid"]
     ask = prices["ask"]
-    
+    spread = ask - bid
+    if spread > MAX_SPREAD:
+        notify_slack(f"[警告] スプレッドに差が許容範囲外なので取引中止")
+        return 3
     if not positions:
         if trend is None:
            return 0
@@ -574,6 +577,7 @@ def first_oder(trend,shared_state=None):
                 return 0
     else:
         return 2
+
 
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
@@ -600,7 +604,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     nstop = 0
 
     while not stop_event.is_set():
-        
+        positions = get_positions()    
         if shared_state.get("cmd") == "save_adx":
             if len(high_prices) > 28 or len(low_prices) > 28 or len(close_prices) > 28:
                 save_price_history(list(high_prices), list(low_prices), list(close_prices))
@@ -679,6 +683,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             nstop = 0
+            
+        if positions:
+            bid = prices["bid"]
+            ask = prices["ask"]
+            #mid = (ask + bid) / 2
+
+            spread = ask - bid
+            if spread > MAX_SPREAD:
+                shared_state["trend"] = None
+                if nstop== 0:
+                    notify_slack(f"[スプレッド超過] 現在のスプレッド={spread:.5f} → 取引中にスプレッド拡大\n損切タイミングなどに影響の可能性あり")
+                    logging.warning(f"[スキップ] 取引中にスプレッド\拡大損切タイミングなどに影響の可能性あり（{spread:.5f} > {MAX_SPREAD:.5f}）")
+                    nstop = 1
+                continue
+            else:
+                nstop = 0
 
         price_buffer.append(bid)
         high_prices.append(ask)
