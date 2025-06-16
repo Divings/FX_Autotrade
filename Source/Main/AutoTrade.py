@@ -894,8 +894,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     trend_active = True
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
 
-
-            if trend == "BUY" and macd_bullish and macd_cross_up and sma_cross_up and rsi < 70 and adx >= 20:
+            if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20:
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi_str}, ADX={adx_str}）")
@@ -907,7 +906,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 else:
                     logging.error("[結果] BUY 失敗")
                 logging.info("[エントリー判定] BUY トレンド確定")
-            elif trend == "SELL" and macd_bearish and macd_cross_down and sma_cross_down and adx >= 20 and rsi > 30:
+            elif trend == "SELL" and (macd_bearish or macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 30:
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi_str}, ADX={adx_str}）")
