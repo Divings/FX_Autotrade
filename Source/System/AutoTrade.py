@@ -458,12 +458,22 @@ def get_margin_status(shared_state):
     except Exception as e:
         notify_slack(f"[証拠金] 取得失敗: {e}")
 
-def fee_test():
+def fee_test(trend):
     """ 
-    手数料から約定金額を算出するコード\n
-    このコードは一定の条件でのみ必要になる場合があります
+    手数料から約定金額を算出するコード
+    trend: "BUY" または "SELL"
     """
-    price = get_price()
+    price_data = get_price()
+    if not price_data:
+        logging.error("価格データが取得できませんでした")
+        return
+    if trend == "BUY":
+        price = price_data["ask"]  # 買い注文は ask で約定
+    elif trend == "SELL":
+        price = price_data["bid"]  # 売り注文は bid で約定
+    else:
+        logging.error(f"無効なトレンド指定: {trend}")
+        return
     amount = LOT_SIZE * 10000 * price  # 0.1lot = 1000通貨、1lot = 10000通貨
     fee = amount * 0.00002  # 0.002%
     logging.info(f"想定手数料: {fee:.3f} 円 (ロット: {LOT_SIZE}, レート: {price}, 約定金額: {amount:.2f})")
@@ -504,7 +514,7 @@ def open_order(side="BUY"):
         if res.status_code == 200 and "data" in data:
             #price = data["data"].get("price", "取得不可")
             notify_slack(f"[注文] 新規建て成功 {side}")
-            fee_test()
+            fee_test(side)
             shared_state["oders_error"]=False
         else:
             notify_slack(f"[注文] 新規建て応答異常: {res.status_code} {data}")
@@ -562,7 +572,7 @@ def close_order(position_id, size, side):
         if res.status_code == 200 and "data" in data:
             # price = data["data"].get("price", "取得不可")
             notify_slack(f"[決済] 成功: {side}")
-            fee_test()
+            fee_test(side)
             shared_state["oders_error"]=False
         else:
             notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
