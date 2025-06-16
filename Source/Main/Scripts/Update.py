@@ -46,5 +46,11 @@ for py_file in main_dir.glob("*.py"):
 # ハッシュファイル更新
 with open(hash_file, 'w') as f:
     json.dump(recorded_hashes, f, indent=2)
-
+import subprocess
+v=input(" リポジトリにプッシュしますか？ (Y or N)>> ")
+if v.lower()=="y":
+    message=input(" Commit Messagre >> ")
+    subprocess.run(f"git commit -m \"{message}\"")
+    subprocess.run("git push git@github.com:Divings/FX_Autotrade.git")
+    print(" コードをプッシュしました")
 input(" >> ")
