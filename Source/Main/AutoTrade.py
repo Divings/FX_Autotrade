@@ -55,7 +55,8 @@ shared_state = {
     "adx_wait_notice":False,
     "forced_entry_date":False,
     "cmd":None,
-    "trend_start_time":None
+    "trend_start_time":None,
+    "oders_error":False
 }
 
 import configparser
@@ -499,9 +500,10 @@ def open_order(side="BUY"):
             #price = data["data"].get("price", "取得不可")
             notify_slack(f"[注文] 新規建て成功 {side}")
             fee_test()
+            shared_state["oders_error"]=False
         else:
             notify_slack(f"[注文] 新規建て応答異常: {res.status_code} {data}")
-
+            shared_state["oders_error"]=True
         # 遅延が0.5秒超えたら警告
         if elapsed > 0.5:
             logging.warning(f"[遅延警告] 新規注文に {elapsed:.2f} 秒かかりました")
@@ -556,9 +558,10 @@ def close_order(position_id, size, side):
             # price = data["data"].get("price", "取得不可")
             notify_slack(f"[決済] 成功: {side}")
             fee_test()
+            shared_state["oders_error"]=False
         else:
             notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
-
+            shared_state["oders_error"]=True
         # 遅延が長い場合ログ記録
         if elapsed > 0.5:
             logging.warning(f"[遅延警告] 決済APIに {elapsed:.2f} 秒かかりました")
@@ -839,10 +842,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"[結果] {trend} すでにポジションあり")
                 elif a==1:
                     logging.info(f"[結果] {trend} 成功")
+                    shared_state["oders_error"]=False
                 else:
                     logging.error(f"[結果] {trend} 失敗")
-                logging.info("[エントリー] ADX強すぎるためクロス無視")
-                shared_state["forced_entry_date"] = today_str
+                if shared_state["oders_error"]==False and a==1:
+                    logging.info("[エントリー] ADX強すぎるためクロス無視")
+                    shared_state["forced_entry_date"] = today_str
 
         if rsi < 20:
             shared_state["trend"] = None
