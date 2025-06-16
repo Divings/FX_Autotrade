@@ -452,6 +452,16 @@ def get_margin_status(shared_state):
     except Exception as e:
         notify_slack(f"[証拠金] 取得失敗: {e}")
 
+def fee_test():
+    """ 
+    手数料から約定金額を算出するコード\n
+    このコードは一定の条件でのみ必要になる場合があります
+    """
+    price = get_price()
+    amount = LOT_SIZE * 10000 * price  # 0.1lot = 1000通貨、1lot = 10000通貨
+    fee = amount * 0.00002  # 0.002%
+    logging.info(f"想定手数料: {fee:.3f} 円 (ロット: {LOT_SIZE}, レート: {price}, 約定金額: {amount:.2f})")
+
 # === 注文発行 ===
 def open_order(side="BUY"):
     path = "/v1/order"
@@ -488,6 +498,7 @@ def open_order(side="BUY"):
         if res.status_code == 200 and "data" in data:
             #price = data["data"].get("price", "取得不可")
             notify_slack(f"[注文] 新規建て成功 {side}")
+            fee_test()
         else:
             notify_slack(f"[注文] 新規建て応答異常: {res.status_code} {data}")
 
@@ -544,6 +555,7 @@ def close_order(position_id, size, side):
         if res.status_code == 200 and "data" in data:
             # price = data["data"].get("price", "取得不可")
             notify_slack(f"[決済] 成功: {side}")
+            fee_test()
         else:
             notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
 
