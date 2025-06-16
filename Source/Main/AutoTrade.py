@@ -578,7 +578,6 @@ def first_oder(trend,shared_state=None):
     else:
         return 2
 
-
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     import statistics
@@ -597,6 +596,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         trend = shared_state["trend"]
     except:
         trend = None
+
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
@@ -861,7 +861,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 else:
                     logging.error("[結果] BUY 失敗")
                 logging.info("[エントリー判定] BUY トレンド確定")
-            elif trend == "SELL" and macd_cross_down and macd_cross_down and adx >= 20 and rsi > 30:
+            elif trend == "SELL" and macd_cross_down and sma_cross_down and adx >= 20 and rsi > 30:
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi_str}, ADX={adx_str}）")
