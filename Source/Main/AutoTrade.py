@@ -268,7 +268,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
 
 # === 設定読み込み ===
 config = load_config_from_mysql()
-SYMBOL="USD_JPY"
+SYMBOL = config["SYMBOL"]
 LOT_SIZE = config["LOT_SIZE"]
 MAX_SPREAD = config["MAX_SPREAD"]
 MAX_LOSS = config["MAX_LOSS"]
