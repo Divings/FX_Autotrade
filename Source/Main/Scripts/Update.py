@@ -53,7 +53,7 @@ v=input(" リポジトリにプッシュしますか？ (Y or N)>> ")
 if v.lower()=="y":
     message=input(" Commit Messagre >> ")
     subprocess.run("git add *")
-    subprocess.run(f"git commit -m \"{message}\"")
+    subprocess.run(f"git commit -a -m \"{message}\"")
     subprocess.run("git push https://github.com/Divings/FX_Autotrade.git")
     print(" コードをプッシュしました")
 else:

@@ -58,6 +58,17 @@ shared_state = {
     "trend_start_time":None
 }
 
+import configparser
+def load_ini():
+    # ConfigParser オブジェクトを作成
+    config = configparser.ConfigParser()
+
+    # config.ini を読み込む
+    config.read('config.ini')
+    reset = config.getboolean('settings', 'reset')
+    return reset
+
+reset = load_ini()
 args=sys.argv
 file_path = sys.argv[0]  # スクリプトファイルのパス
 folder_path = os.path.dirname(os.path.abspath(file_path))
@@ -650,7 +661,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             price_buffer.clear()
             shared_state["price_reset_done"] = True            
         if now.hour >= TIME_STOP or now.hour < 5:
-            if not shared_state.get("vstop_active", False):
+            if not shared_state.get("vstop_active", False):                   
                 notify_slack(f"[クールダウン] {str(TIME_STOP)}時以降のため自動売買スキップ")
                 logging.info(f"[時間制限] {str(TIME_STOP)}時以降の取引スキップ")
                 shared_state["vstop_active"] = True
