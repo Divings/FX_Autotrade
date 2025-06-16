@@ -754,6 +754,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         sma_cross_up = short_ma > long_ma and shared_state.get("last_short_ma", 0) <= shared_state.get("last_long_ma", 0)
         sma_cross_down = short_ma < long_ma and shared_state.get("last_short_ma", 0) >= shared_state.get("last_long_ma", 0)
         
+        logging.info(f"[INFO] SMA クロス SMA_UP = {sma_cross_up} SMA_DOWN = {sma_cross_down}")
         shared_state["last_short_ma"] = short_ma
         shared_state["last_long_ma"] = long_ma
         
