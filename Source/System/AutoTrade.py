@@ -138,7 +138,8 @@ DEFAULT_CONFIG = {
     "VOL_THRESHOLD": 0.03,
     "TIME_STOP":22,
     "MACD_DIFF_THRESHOLD":0.002,
-    "SKIP_MODE":0
+    "SKIP_MODE":0,
+    "SYMBOL":"USD_JPY"
 }
 
 macd_valid = False
@@ -201,14 +202,18 @@ def load_config_from_mysql():
         config = DEFAULT_CONFIG.copy()
         for key, value in rows:
             if key in config:
-                # 自動型変換
+                original_type = type(DEFAULT_CONFIG[key])
                 try:
-                    if '.' in value:
-                        config[key] = float(value)
-                    else:
+                    if original_type == int:
                         config[key] = int(value)
-                except:
-                    pass
+                    elif original_type == float:
+                        config[key] = float(value)
+                    elif original_type == str:
+                        config[key] = str(value)
+                    elif original_type == bool:
+                        config[key] = value.lower() in ['true', '1', 'yes']
+                except Exception:
+                    pass  # 型変換に失敗してもスキップ
         cursor.close()
         conn.close()
         return config
@@ -574,7 +579,6 @@ def close_order(position_id, size, side):
     except Exception as e:
         notify_slack(f"[決済] 失敗: {e}")
         return None
-
 
 def first_oder(trend,shared_state=None):
     positions = get_positions()
