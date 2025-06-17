@@ -1,0 +1,23 @@
+# PythonファイルはLFに統一
+*.py text eol=lf
+
+# MarkdownやドキュメントもLFで統一（必要なら）
+*.md text eol=lf
+*.txt text eol=lf
+
+# BashスクリプトなどもLFで
+*.sh text eol=lf
+
+# Windows用のバッチファイルはCRLF
+*.bat text eol=crlf
+
+# 画像・バイナリは自動変換しない
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.ico binary
+
+# 任意：全体をtextとして扱い、改行変換を個別に制御
+* text=auto
