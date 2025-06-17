@@ -161,7 +161,6 @@ def is_in_cooldown(shared_state):
 def reverse_side(side: str) -> str:
     return "SELL" if side.upper() == "BUY" else "BUY"
 
-
 async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
     last_notified = {}  # 建玉ごとの通知済みprofit記録
 
