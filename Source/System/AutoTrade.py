@@ -174,7 +174,7 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
 
         ask = prices["ask"]
         bid = prices["bid"]
-        etime=shared_state.get["entry_time"]
+        etime=shared_state.get("entry_time")
         for pos in positions:
             pid = pos["positionId"]
             elapsed = time.time() - etime
@@ -195,6 +195,48 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
                     notify_slack(f"[保有] 建玉{pid} 継続中: {profit}円")
                     last_notified[pid] = profit
         await asyncio.sleep(interval_sec)
+
+def should_skip_entry(candles, direction: str):
+    """
+    BUY or SELL エントリー直前にスキップすべきかどうかを判定する関数
+
+    Args:
+        candles (list[dict]): 過去のローソク足（最低2本必要）
+        direction (str): "BUY" または "SELL"
+
+    Returns:
+        (bool, str): (スキップすべきか, 理由メッセージ)
+    """
+    last = candles[-1]
+    prev = candles[-2]
+
+    open1, close1 = prev["open"], prev["close"]
+    high1, low1 = prev["high"], prev["low"]
+    open2, close2 = last["open"], last["close"]
+
+    def body(o, c): return abs(o - c)
+
+    if direction == "BUY":
+        # 陽線2本連続
+        if close1 > open1 and close2 > open2:
+            return True, "陽線2本連続 → 高値警戒でBUY見送り"
+
+        # 上ヒゲが長い（失速）
+        upper_wick = high1 - max(open1, close1)
+        if upper_wick > body(open1, close1):
+            return True, "上ヒゲ優勢 → BUY見送り"
+
+    elif direction == "SELL":
+        # 陰線2本連続
+        if close1 < open1 and close2 < open2:
+            return True, "陰線2本連続 → 底値警戒でSELL見送り"
+
+        # 下ヒゲが長い（反発）
+        lower_wick = min(open1, close1) - low1
+        if lower_wick > body(open1, close1):
+            return True, "下ヒゲ優勢 → SELL見送り"
+
+    return False, ""
 
 def load_config_from_mysql():
     try:
@@ -636,6 +678,30 @@ def first_oder(trend,shared_state=None):
                 return 0
     else:
         return 2
+    
+def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
+    """
+    price_buffer（1秒〜数秒おきの価格履歴）から直近2本のローソク足を構築
+    1分あたり20本程度の粒度と仮定
+    """
+    if len(prices) < 40:
+        return []
+
+    candles = []
+
+    # 直近2分分の価格を20本ずつに分割してローソク足を作る
+    for i in range(2):
+        slice = prices[-(40 - i*20):- (20 - i*20)]
+        candle = {
+            "open": slice[0],
+            "close": slice[-1],
+            "high": max(slice),
+            "low": min(slice),
+        }
+        candles.append(candle)
+
+    return candles
+
 
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
@@ -926,6 +992,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi_str}, ADX={adx_str}）")
+                candles = build_last_2_candles_from_prices(list(price_buffer))
+                if len(candles) >= 2:
+                    skip, reason = should_skip_entry(candles, trend)
+                    if skip:
+                        shared_state["trend"] = None
+                        logging.info(f"[エントリースキップ] {reason}")
+                        notify_slack(f"[スキップ] {reason}")
+                        await asyncio.sleep(interval_sec)
+                        continue
                 a=first_oder(trend,shared_state)
                 if a==2:
                     logging.info("[結果] BUY すでにポジションあり")
@@ -938,6 +1013,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi_str}, ADX={adx_str}）")
+                candles = build_last_2_candles_from_prices(list(price_buffer))
+                if len(candles) >= 2:
+                    skip, reason = should_skip_entry(candles, trend)
+                    if skip:
+                        shared_state["trend"] = None
+                        logging.info(f"[エントリースキップ] {reason}")
+                        notify_slack(f"[スキップ] {reason}")
+                        await asyncio.sleep(interval_sec)
+                        continue
                 a=first_oder(trend,shared_state)
                 if a==2:
                     logging.info("[結果] SELL すでにポジションあり")
