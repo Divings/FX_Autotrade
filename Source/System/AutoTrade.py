@@ -245,7 +245,16 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             # スリッページバッファ込みで早めに判断
+            bid = prices["bid"]
+            ask = prices["ask"]
+            #mid = (ask + bid) / 2
+
+            spread = ask - bid
+            
             if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
+                if spread > MAX_SPREAD:
+                    notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
+                    continue
                 notify_slack(f"[即時損切] 損失が {profit} 円（許容: -{MAX_LOSS}円 ±{SLIPPAGE_BUFFER}）→ 強制決済実行")
                 
                 start = time.time()
@@ -735,7 +744,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend"] = None
                 if nstop== 0:
                     notify_slack(f"[スプレッド超過] 現在のスプレッド={spread:.5f} → 取引中にスプレッド拡大\n損切タイミングなどに影響の可能性あり")
-                    logging.warning(f"[スキップ] 取引中にスプレッド\拡大損切タイミングなどに影響の可能性あり（{spread:.5f} > {MAX_SPREAD:.5f}）")
+                    logging.warning(f"[スキップ] 取引中にスプレッド拡大損切タイミングなどに影響の可能性あり（{spread:.5f} > {MAX_SPREAD:.5f}）")
                     nstop = 1
                 continue
             else:
