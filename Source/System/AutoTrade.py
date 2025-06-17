@@ -487,8 +487,7 @@ def fee_test(trend):
     fee = amount * 0.00002  # 0.002%
     notify_slack(f"想定手数料は、{fee:.3f} 円です")
     logging.info(f"想定手数料: {fee:.3f} 円 (ロット: {LOT_SIZE}, レート: {price}, 約定金額: {amount:.2f})")
-    out=str(fee:.3f)
-    
+        
 # === 注文発行 ===
 def open_order(side="BUY"):
     path = "/v1/order"
