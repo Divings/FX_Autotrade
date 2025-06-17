@@ -953,7 +953,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         shared_state["oders_error"]=False
                     else:
                         logging.error(f"[結果] {trend} 失敗")
-                    if shared_state["oders_error"]==False and a==1:
+                    if a==1:
                         logging.info("[エントリー] ADX強すぎるためクロス無視")
                         shared_state["forced_entry_date"] = today_str
                         shared_state["last_trend"] = trend
