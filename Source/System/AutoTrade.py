@@ -719,7 +719,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
-    trend = shared_state.get("last_trend",None)
+    trend = shared_state.get("trend",None)
     
 
     last_rsi_state = None
