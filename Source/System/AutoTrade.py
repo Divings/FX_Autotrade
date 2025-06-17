@@ -717,10 +717,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
-    try:
-        trend = shared_state["trend"]
-    except:
-        trend = None
+    trend = shared_state.get("last_trend",None)
+    
 
     last_rsi_state = None
     last_adx_state = None
@@ -955,6 +953,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     if shared_state["oders_error"]==False and a==1:
                         logging.info("[エントリー] ADX強すぎるためクロス無視")
                         shared_state["forced_entry_date"] = today_str
+                        shared_state["last_trend"] = trend
                 else:
                     if timestop == 0:
                         notify_slack(f"[情報] MACDクロス無視してエントリーだが、9時以降なのでスキップ")
@@ -1006,6 +1005,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info("[結果] BUY すでにポジションあり")
                 elif a==1:
                     logging.info("[結果] BUY 成功")
+                    shared_state["last_trend"] = trend
                 else:
                     logging.error("[結果] BUY 失敗")
                 logging.info("[エントリー判定] BUY トレンド確定")
@@ -1027,6 +1027,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info("[結果] SELL すでにポジションあり")
                 elif a==1:
                     logging.info("[結果] SELL 成功")
+                    shared_state["last_trend"] = trend
                 else:
                     
                     logging.error("[結果] SELL 失敗")
