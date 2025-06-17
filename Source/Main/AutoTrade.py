@@ -158,6 +158,10 @@ def is_in_cooldown(shared_state):
     cooldown_until = shared_state.get("cooldown_until", 0)
     return time.time() < cooldown_until, max(0, int(cooldown_until - time.time()))
 
+def reverse_side(side: str) -> str:
+    return "SELL" if side.upper() == "BUY" else "BUY"
+
+
 async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
     last_notified = {}  # 建玉ごとの通知済みprofit記録
 
@@ -170,15 +174,20 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
 
         ask = prices["ask"]
         bid = prices["bid"]
-
+        etime=shared_state.get["entry_time"]
         for pos in positions:
             pid = pos["positionId"]
+            elapsed = time.time() - etime
             entry = float(pos["price"])
             size = int(pos["size"])
             side = pos.get("side", "BUY").upper()
 
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
-
+            if elapsed > 120:
+                notify_slack("注意! 保有時間が長すぎます\n 強制決済を発動します")
+                rside=reverse_side(side) 
+                close_order(pid,size,rside)
+                
             # 通知条件：利益または損失が±10円以上、かつ通知内容が前回と違うとき
             if abs(profit) > 10:
                 prev = last_notified.get(pid)
