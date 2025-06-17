@@ -813,8 +813,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if positions:
             bid = prices["bid"]
             ask = prices["ask"]
-            #mid = (ask + bid) / 2
-
+            
             spread = ask - bid
             if spread > MAX_SPREAD:
                 shared_state["trend"] = None
@@ -928,7 +927,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             notify_slack(f"[警告] ADXが100に近いためスキップ（ADX={adx:.2f}）")
             logging.warning("[スキップ] ADX異常値 → 判定中止")
             continue
-        elif adx >= 70 and abs(diff) > 0.015 and trend is not None:
+        elif adx >= 70 and abs(diff) > 0.015 and trend is not None and (now.hour > 5 and now.hour < 9):
             last_forced_entry_date = shared_state.get("forced_entry_date")
 
             if last_forced_entry_date == today_str:
