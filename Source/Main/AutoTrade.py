@@ -692,6 +692,8 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
     # 直近2分分の価格を20本ずつに分割してローソク足を作る
     for i in range(2):
         slice = prices[-(40 - i*20):- (20 - i*20)]
+        if len(slice) < 1:
+            continue  # または return [] にしてもよい
         candle = {
             "open": slice[0],
             "close": slice[-1],
@@ -908,6 +910,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         rsi_limit = (trend == "BUY" and rsi < 70) or (trend == "SELL" and rsi > 30)
         logging.info(f"[MACD] クロス判定: UP={macd_cross_up}, DOWN={macd_cross_down}")
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
+        
         if len(close_prices) >= 5:
             price_range = max(close_prices) - min(close_prices)
             if price_range < 0.03:
@@ -1241,6 +1244,8 @@ if __name__ == "__main__":
         asyncio.run(auto_trade())
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
+        save_state(shared_state)
+        save_price_buffer(price_buffer)
     except:
         save_state(shared_state)
         save_price_buffer(price_buffer)
