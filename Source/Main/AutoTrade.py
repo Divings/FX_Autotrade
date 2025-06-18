@@ -74,7 +74,8 @@ args=sys.argv
 file_path = sys.argv[0]  # スクリプトファイルのパス
 folder_path = os.path.dirname(os.path.abspath(file_path))
 os.chdir(folder_path)
-
+import tempfile
+temp_dir = tempfile.mkdtemp()
 session = requests.Session() # セッションを生成
 
 TEST = False # デバッグ用フラグ
@@ -90,9 +91,16 @@ def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     return macd.tolist(), signal.tolist()
 
 # ===ログ設定 ===
-LOG_FILE1 = f"fx_debug_log.txt"
+LOG_FILE1 = f"{temp_dir}/fx_debug_log.txt"
 _log_last_reset = datetime.now()
 os.makedirs("last_temp", exist_ok=True)
+now = datetime.now()
+
+# フォーマット
+formatted = now.strftime("%Y/%d/%m %H:%M")
+with open("temp_dir_path.txt", "w", encoding="utf-8") as f:
+    f.write(f"最終記録 {formatted} \n")
+    f.write(temp_dir)
 
 def setup_logging():
     """初期ログ設定（起動時）"""
