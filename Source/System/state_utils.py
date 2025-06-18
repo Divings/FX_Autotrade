@@ -4,7 +4,18 @@ import pickle
 from datetime import datetime, timedelta
 from collections import deque
 
-STATE_FILE = "shared_state.json"
+try:
+    with open("last_temp/last_temp.txt", "r", encoding="utf-8") as f:
+        saved_temp_dir = f.read().strip()
+except FileNotFoundError:
+    saved_temp_dir = None
+
+# ディレクトリ存在確認
+if saved_temp_dir and os.path.isdir(saved_temp_dir):
+    STATE_FILE = os.path.join(saved_temp_dir, "shared_state.json")
+else:
+    STATE_FILE = "shared_state.json"
+
 BUFFER_FILE = "price_buffer.pkl"
 BUFFER_MAXLEN = 240  # 12分相当
 ADX_BUFFER_FILE = "adx_buffer.pkl"
