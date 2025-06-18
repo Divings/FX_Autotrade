@@ -1033,6 +1033,31 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     
                     logging.error("[結果] SELL 失敗")
                 logging.info("[エントリー判定] SELL トレンド確定")
+            elif positions and trend=="SELL" and (macd_bullish or macd_cross_up):
+                notify_slack(f"[トレンド] トレンド反転と思われる挙動を検知 即時損切り")
+                candles = build_last_2_candles_from_prices(list(price_buffer))
+                if len(candles) >= 2:
+                    skip, reason = should_skip_entry(candles, trend)
+                    if skip:
+                        shared_state["trend"] = None
+                        logging.info(f"[エントリースキップ] {reason}")
+                        notify_slack(f"[スキップ] {reason}")
+                        await asyncio.sleep(interval_sec)
+                        continue
+                    pid = positions["positionId"]
+                    size_str = int(positions["size"])
+                    side = positions.get("side", "BUY").upper()
+                    close_side = "SELL" if side == "BUY" else "BUY"
+                    close_order(pid, size_str, close_side)
+                    write_log(close_side, bid)
+                if a==2:
+                    logging.info("[結果] SELL すでにポジションあり")
+                elif a==1:
+                    logging.info("[結果] SELL 成功")
+                    shared_state["last_trend"] = trend
+                else:
+                    
+                    logging.error("[結果] SELL 失敗")
             else:
                 shared_state["trend"] = None
                 notify_slack(f"[スキップ] MACDクロス未検出のためスキップ（RSI={rsi_str}, ADX={adx_str}, MACD={macd_str}, Signal={signal_str}）")
