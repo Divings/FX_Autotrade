@@ -6,7 +6,7 @@ from collections import deque
 
 
 STATE_FILE = "shared_state.json"
-UFFER_FILE = "price_buffer.pkl"
+BUFFER_FILE = "price_buffer.pkl"
 BUFFER_MAXLEN = 240  # 12分相当
 ADX_BUFFER_FILE = "adx_buffer.pkl"
 
