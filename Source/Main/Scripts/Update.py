@@ -5,6 +5,7 @@ import shutil
 import os
 import sys
 
+print("")
 hash = "bf9069ea9e93f786cdc7bc351048b35ed9c0d2d2ab3b2ee26df736c775bd6f23"
 
 text = input(" コードをSystemディレクトリにコピーするには、管理者コードを入力 >> ")
@@ -62,6 +63,16 @@ import subprocess
 
 v=input(" リポジトリにプッシュしますか？ (Y or N)>> ")
 if v.lower()=="y":
+    print("")
+  
+    text = input(" コードをリポジトリに反映するには、管理者コードを入力 >> ")
+
+    Authcode = sha256_hash = hashlib.sha256(text.encode('utf-8')).hexdigest()
+    if hash != Authcode:
+        print("\n 管理者コードが一致しません")
+        input(" >> ")
+        sys.exit(0)
+    
     message=input(" Commit Messagre >> ")
     subprocess.run("git add *")
     subprocess.run(f"git commit -a -m \"{message}\"")
