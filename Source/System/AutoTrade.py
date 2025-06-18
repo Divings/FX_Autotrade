@@ -101,7 +101,8 @@ formatted = now.strftime("%Y/%d/%m %H:%M")
 with open(f"last_temp/last_temp.txt", "w", encoding="utf-8") as f:
     f.write(f"最終記録 {formatted} \n")
     f.write(temp_dir)
-
+    f.write("\n")
+    
 def setup_logging():
     """初期ログ設定（起動時）"""
     handler = TimedRotatingFileHandler(
