@@ -962,7 +962,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         timestop = 1
 
         if rsi < 20:
-            shared_state["trend"] = None
             notify_slack(f"[RSI下限] RSI={rsi_str} → 反発警戒でスキップ")
             logging.info("[スキップ] RSI下限で警戒")
             await asyncio.sleep(interval_sec)
