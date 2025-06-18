@@ -10,10 +10,12 @@ import configparser
 def load_config():
     # ConfigParser オブジェクトを作成
     config = configparser.ConfigParser()
-
-    # config.ini を読み込む
-    config.read('config.ini')
-    debug = config.getboolean('settings', 'debug')
+    try:
+        # config.ini を読み込む
+        config.read('config.ini')
+        debug = config.getboolean('settings', 'debug')
+    except:
+        debug = False
     return debug
 
 debug=load_config()
