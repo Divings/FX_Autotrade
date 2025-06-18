@@ -98,7 +98,7 @@ now = datetime.now()
 
 # フォーマット
 formatted = now.strftime("%Y/%d/%m %H:%M")
-with open("temp_dir_path.txt", "w", encoding="utf-8") as f:
+with open(f"last_temp/last_temp.txt", "w", encoding="utf-8") as f:
     f.write(f"最終記録 {formatted} \n")
     f.write(temp_dir)
 
