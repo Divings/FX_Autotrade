@@ -2,6 +2,8 @@ import asyncio
 from dotenv import load_dotenv
 import os
 import socket
+import logging
+
 # 認証トークン（適宜設定）
 load_dotenv()  # .envを読み込み
 
@@ -24,7 +26,7 @@ async def handle_client(reader, writer,shared_state=None):
         await asyncio.sleep(0.1)
         writer.close()
     except Exception as e:
-        print(f"[エラー] handle_client: {e}")
+        logging.error(f"[エラー] handle_client: {e}")
 
 async def start_socket_server(shared_state, host='127.0.0.1', port=8888):
     async def handler(reader, writer):

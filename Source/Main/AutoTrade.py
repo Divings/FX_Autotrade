@@ -1154,6 +1154,7 @@ async def auto_trade():
     quick_profit_task = loop.create_task(monitor_quick_profit(shared_state, stop_event))
 
     # エラー通知
+    server_task.add_done_callback(lambda t: notify_slack(f"情報保存用サーバが終了しました: {t.exception()}"))
     trend_task.add_done_callback(lambda t: notify_slack(f"トレンド関数が終了しました: {t.exception()}"))
     quick_profit_task.add_done_callback(lambda t: notify_slack(f"即時利確関数が終了しました: {t.exception()}"))
     # 全てのタスクを待機（終了しない限り常駐）
