@@ -365,7 +365,7 @@ async def record_price_data(filename="price_log.csv", symbol="USD_JPY", interval
         pass  # 既にファイルが存在すればスキップ
 
     while True:
-        timestamp = datetime.datetime.utcnow().isoformat()
+        timestamp = datetime.datetime.now(datetime.UTC).isoformat()
         now = datetime.now()
         if now.hour <= 22 and now.hour>=5:
             continue
@@ -1200,7 +1200,7 @@ async def auto_trade():
     trend_task = loop.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     loss_cut_task = loop.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quick_profit_task = loop.create_task(monitor_quick_profit(shared_state, stop_event))
-    record_file=loop.create_task(record_price_data())
+    record_file=loop.create_task(record_price_data(filename=f"{temp_dir}/price_log.csv"))
     
     # エラー通知
     server_task.add_done_callback(lambda t: notify_slack(f"情報保存用サーバが終了しました: {t.exception()}"))
