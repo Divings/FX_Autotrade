@@ -102,7 +102,8 @@ with open(f"last_temp/last_temp.txt", "w", encoding="utf-8") as f:
     f.write(f"最終記録 {formatted} \n")
     f.write(temp_dir)
     f.write("\n")
-    
+print(temp_dir)
+
 def setup_logging():
     """初期ログ設定（起動時）"""
     handler = TimedRotatingFileHandler(
@@ -192,10 +193,11 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             side = pos.get("side", "BUY").upper()
 
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
-            if elapsed > 120:
+            if elapsed > 180:
                 notify_slack("注意! 保有時間が長すぎます\n 強制決済を発動します")
                 rside=reverse_side(side) 
                 close_order(pid,size,rside)
+                record_result(profit, shared_state)
                 
             # 通知条件：利益または損失が±10円以上、かつ通知内容が前回と違うとき
             if abs(profit) > 10:
@@ -349,54 +351,6 @@ TIME_STOP = config["TIME_STOP"]
 MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 
-import requests
-import asyncio
-import datetime
-import aiofiles
-
-async def record_price_data(filename="price_log.csv", symbol="USD_JPY", interval_sec=1):
-    api_url = "https://forex-api.coin.z.com/public/v1/ticker"
-    
-    # ヘッダー行の確認（非同期でファイルオープン）
-    try:
-        async with aiofiles.open(filename, mode="x") as f:
-            await f.write("timestamp,ask,bid,spread,status\n")
-    except FileExistsError:
-        pass  # 既にファイルが存在すればスキップ
-
-    while True:
-        timestamp = datetime.datetime.now(datetime.UTC).isoformat()
-        now = datetime.now()
-        if now.hour <= 22 and now.hour>=5:
-            continue
-        try:
-            # 同期API呼び出しを非同期でラップ
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(None, requests.get, api_url)
-            response.raise_for_status()
-            data = response.json().get("data", [])
-            found = False
-            for item in data:
-                if item.get("symbol") == symbol:
-                    ask = float(item["ask"])
-                    bid = float(item["bid"])
-                    spread = ask - bid
-                    line = f"{timestamp},{ask},{bid},{spread},OK\n"
-                    print(line.strip())
-                    found = True
-                    break
-            if not found:
-                line = f"{timestamp},,,,'{symbol} not found'\n"
-        except Exception as e:
-            line = f"{timestamp},,,,'Error: {str(e)}'\n"
-            print(f"エラー発生: {e}")
-
-        # 非同期でファイル書き込み
-        async with aiofiles.open(filename, mode="a") as f:
-            await f.write(line)
-
-        await asyncio.sleep(interval_sec)
-
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
         return False
@@ -406,6 +360,8 @@ def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
     save_state(shared_state)
     save_price_buffer(price_buffer)
+    log_queue.put(None)
+    
     sys.exit(0)
 
 # === 環境変数の読み込み ===
@@ -1200,7 +1156,6 @@ async def auto_trade():
     trend_task = loop.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     loss_cut_task = loop.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quick_profit_task = loop.create_task(monitor_quick_profit(shared_state, stop_event))
-    record_file=loop.create_task(record_price_data(filename=f"{temp_dir}/price_log.csv"))
     
     # エラー通知
     server_task.add_done_callback(lambda t: notify_slack(f"情報保存用サーバが終了しました: {t.exception()}"))
@@ -1213,7 +1168,7 @@ async def auto_trade():
         trend_task,
         loss_cut_task,
         quick_profit_task
-    )
+        )
     try:
         while True:
             if is_market_open() != "OPEN":
@@ -1298,7 +1253,6 @@ async def auto_trade():
             await asyncio.sleep(CHECK_INTERVAL)
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
-        
     except Exception as e:
         notify_slack(f"[致命的エラー] auto_trade() にて {type(e).__name__}: {e}")
         logging.exception("auto_tradeで例外が発生しました")
@@ -1309,11 +1263,6 @@ async def auto_trade():
         loss_cut_task.cancel()
         quick_profit_task.cancel()
         hold_status_task.cancel()
-        record_file.cancel()
-        try:
-            await record_file
-        except asyncio.CancelledError:
-            notify_slack("[INFO] record_file タスク終了")
         try:
             await hold_status_task
         except asyncio.CancelledError:
