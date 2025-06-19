@@ -28,7 +28,7 @@ def record_price_data(symbol="USD_JPY", interval_sec=1):
         timestamp = datetime.datetime.now(datetime.UTC).isoformat()
         now = datetime.datetime.now()
 
-        if 5 <= now.hour <= 22:
+        if now.hour >=5:
             break
 
         try:
