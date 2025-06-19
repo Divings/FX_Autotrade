@@ -349,6 +349,54 @@ TIME_STOP = config["TIME_STOP"]
 MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 
+import requests
+import asyncio
+import datetime
+import aiofiles
+
+async def record_price_data(filename="price_log.csv", symbol="USD_JPY", interval_sec=1):
+    api_url = "https://forex-api.coin.z.com/public/v1/ticker"
+    
+    # ヘッダー行の確認（非同期でファイルオープン）
+    try:
+        async with aiofiles.open(filename, mode="x") as f:
+            await f.write("timestamp,ask,bid,spread,status\n")
+    except FileExistsError:
+        pass  # 既にファイルが存在すればスキップ
+
+    while True:
+        timestamp = datetime.datetime.utcnow().isoformat()
+        now = datetime.now()
+        if now.hour <= 22 and now.hour>=5:
+            continue
+        try:
+            # 同期API呼び出しを非同期でラップ
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, requests.get, api_url)
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            found = False
+            for item in data:
+                if item.get("symbol") == symbol:
+                    ask = float(item["ask"])
+                    bid = float(item["bid"])
+                    spread = ask - bid
+                    line = f"{timestamp},{ask},{bid},{spread},OK\n"
+                    print(line.strip())
+                    found = True
+                    break
+            if not found:
+                line = f"{timestamp},,,,'{symbol} not found'\n"
+        except Exception as e:
+            line = f"{timestamp},,,,'Error: {str(e)}'\n"
+            print(f"エラー発生: {e}")
+
+        # 非同期でファイル書き込み
+        async with aiofiles.open(filename, mode="a") as f:
+            await f.write(line)
+
+        await asyncio.sleep(interval_sec)
+
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     if len(prices) < 5:
         return False
@@ -1152,7 +1200,8 @@ async def auto_trade():
     trend_task = loop.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     loss_cut_task = loop.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quick_profit_task = loop.create_task(monitor_quick_profit(shared_state, stop_event))
-
+    record_file=loop.create_task(record_price_data())
+    
     # エラー通知
     server_task.add_done_callback(lambda t: notify_slack(f"情報保存用サーバが終了しました: {t.exception()}"))
     trend_task.add_done_callback(lambda t: notify_slack(f"トレンド関数が終了しました: {t.exception()}"))
@@ -1260,6 +1309,11 @@ async def auto_trade():
         loss_cut_task.cancel()
         quick_profit_task.cancel()
         hold_status_task.cancel()
+        record_file.cancel()
+        try:
+            await record_file
+        except asyncio.CancelledError:
+            notify_slack("[INFO] record_file タスク終了")
         try:
             await hold_status_task
         except asyncio.CancelledError:
