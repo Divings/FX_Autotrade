@@ -133,6 +133,9 @@ notify_slack("自動売買システム起動")
 
 # == 記録済みデータ読み込み ===
 shared_state = load_state()
+if shared_state.get("cmd") == "save_adx":
+    shared_state["cmd"] == None
+
 price_buffer = load_price_buffer()
 
 # LOG_FILE = "fx_trade_log.csv"
