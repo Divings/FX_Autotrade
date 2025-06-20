@@ -11,9 +11,19 @@ def read_temp_dir(filepath="last_temp/last_temp.txt"):
     print(f"取得した保存先: {temp_dir}")
     return temp_dir
 
+def is_market_open():
+    try:
+        response = requests.get(f"https://forex-api.coin.z.com/public/v1/status")
+        response.raise_for_status()
+        status = response.json().get("data", {}).get("status")
+        
+        return status
+    except Exception as e:
+        return False
+
 def record_price_data(symbol="USD_JPY", interval_sec=1):
     api_url = "https://forex-api.coin.z.com/public/v1/ticker"
-
+    
     # temp_dirをファイルから取得
     temp_dir = read_temp_dir()
 
@@ -27,8 +37,10 @@ def record_price_data(symbol="USD_JPY", interval_sec=1):
     while True:
         timestamp = datetime.datetime.now(datetime.UTC).isoformat()
         now = datetime.datetime.now()
+        status = is_market_open()
 
-        if now.hour >=5:
+        weekday_num = now.weekday()
+        if now.hour >=5 or (weekday_num == 5 or weekday_num == 6 and status != "OPN"):
             break
 
         try:

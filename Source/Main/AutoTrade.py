@@ -359,9 +359,7 @@ def is_high_volatility(prices, threshold=VOL_THRESHOLD):
 def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
     save_state(shared_state)
-    save_price_buffer(price_buffer)
-    log_queue.put(None)
-    
+    save_price_buffer(price_buffer)  
     sys.exit(0)
 
 # === 環境変数の読み込み ===
