@@ -97,7 +97,7 @@ os.makedirs("last_temp", exist_ok=True)
 now = datetime.now()
 
 # フォーマット
-formatted = now.strftime("%Y/%d/%m %H:%M")
+formatted = now.strftime("%Y/%m/%d %H:%M")
 with open(f"last_temp/last_temp.txt", "w", encoding="utf-8") as f:
     f.write(f"最終記録 {formatted} \n")
     f.write(temp_dir)
@@ -196,8 +196,8 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             side = pos.get("side", "BUY").upper()
 
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
-            if elapsed > 180:
-                notify_slack("注意! 保有時間が長すぎます\n 強制決済を発動します")
+            if elapsed > 240:
+                notify_slack(f"注意! 保有時間が長すぎます\n 強制決済を発動します {profit}")
                 rside=reverse_side(side) 
                 close_order(pid,size,rside)
                 record_result(profit, shared_state)

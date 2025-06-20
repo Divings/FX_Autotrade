@@ -35,7 +35,7 @@ def record_price_data(symbol="USD_JPY", interval_sec=1):
         f.write("timestamp,ask,bid,spread,status\n")
 
     while True:
-        timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
         now = datetime.datetime.now()
         status = is_market_open()
 
