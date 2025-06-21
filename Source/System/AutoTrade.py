@@ -35,7 +35,10 @@ from state_utils import (
 )
 from Price import extract_price_from_response
 from logs import write_log
+from Assets import assets
+
 night=False
+
 shared_state = {
     "trend": None,
     "last_trend": None,
@@ -372,6 +375,14 @@ API_KEY = conf["API_KEY"]
 API_SECRET = conf["API_SECRET"]
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
+
+out = assets(API_KEY,API_SECRET)
+
+notify_slack(f"現在の取引余力は{out["availableAmount"]}円です。")
+
+def notify_asset():
+    out=assets(API_KEY,API_SECRET)
+    notify_slack(f"現在の取引余力は{out["availableAmount"]}円です。\n 現在の現金残高は{out["balance"]}円です。")
 
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
@@ -744,6 +755,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     nstop = 0
     timestop = 0
     m = 0
+    s = 0
     while not stop_event.is_set():
         positions = get_positions()    
         if shared_state.get("cmd") == "save_adx":
@@ -791,6 +803,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             price_buffer.clear()
             m = 0
             shared_state["price_reset_done"] = True 
+        if now.hour == 6:
+            if s == 0:
+                notify_asset()
+                s = 1
+            if s == 1 and now.hour !=6:
+                s = 0
         if night != True:
             if now.hour >= TIME_STOP or now.hour < 5:
                 if not shared_state.get("vstop_active", False):                   
