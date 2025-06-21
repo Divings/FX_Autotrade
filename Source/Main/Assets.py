@@ -21,4 +21,4 @@ def assets(apiKey,secretKey):
     }
 
     res = requests.get(endPoint + path, headers=headers)
-    return json.dumps(res.json(), indent=2)
+    return json.loads(res.text)

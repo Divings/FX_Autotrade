@@ -377,12 +377,16 @@ BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
 out = assets(API_KEY,API_SECRET)
-
-notify_slack(f"現在の取引余力は{out["availableAmount"]}円です。")
+available_amount = int(float(out['data']['availableAmount']))
+notify_slack(f"現在の取引余力は{available_amount}円です。")
 
 def notify_asset():
+    available_amount = int(float(out['data']['availableAmount']))
+    balance = int(float(out['data']['balance']))
+
     out=assets(API_KEY,API_SECRET)
-    notify_slack(f"現在の取引余力は{out["availableAmount"]}円です。\n 現在の現金残高は{out["balance"]}円です。")
+    notify_slack(f"現在の取引余力は{available_amount}円です。\n 現在の現金残高は{balance}円です。")
+    return 0
 
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
