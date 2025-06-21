@@ -106,7 +106,12 @@ with open(f"last_temp/last_temp.txt", "w", encoding="utf-8") as f:
     f.write(f"最終記録 {formatted} \n")
     f.write(temp_dir)
     f.write("\n")
-print(temp_dir)
+
+import platform
+os_name = platform.system()
+
+if os_name=="Windows":
+    print(temp_dir)
 
 def setup_logging():
     """初期ログ設定（起動時）"""
