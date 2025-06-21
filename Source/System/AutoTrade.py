@@ -35,6 +35,7 @@ from state_utils import (
 )
 from Price import extract_price_from_response
 from logs import write_log
+night=False
 shared_state = {
     "trend": None,
     "last_trend": None,
@@ -742,7 +743,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     vstop = 0
     nstop = 0
     timestop = 0
-
+    m = 0
     while not stop_event.is_set():
         positions = get_positions()    
         if shared_state.get("cmd") == "save_adx":
@@ -788,21 +789,26 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             low_prices.clear()
             close_prices.clear()
             price_buffer.clear()
-            shared_state["price_reset_done"] = True            
-        if now.hour >= TIME_STOP or now.hour < 5:
-            if not shared_state.get("vstop_active", False):                   
-                notify_slack(f"[クールダウン] {str(TIME_STOP)}時以降のため自動売買スキップ")
-                logging.info(f"[時間制限] {str(TIME_STOP)}時以降の取引スキップ")
-                shared_state["vstop_active"] = True
-                shared_state["forced_entry_date"] = False
-                if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
-                    pass
-                else:
-                    save_price_history(high_prices, low_prices, close_prices)
-            await asyncio.sleep(interval_sec)
-            continue
+            shared_state["price_reset_done"] = True 
+        if night==True:           
+            if now.hour >= TIME_STOP or now.hour < 5:
+                if not shared_state.get("vstop_active", False):                   
+                    notify_slack(f"[クールダウン] {str(TIME_STOP)}時以降のため自動売買スキップ")
+                    logging.info(f"[時間制限] {str(TIME_STOP)}時以降の取引スキップ")
+                    shared_state["vstop_active"] = True
+                    shared_state["forced_entry_date"] = False
+                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
+                        pass
+                    else:
+                        save_price_history(high_prices, low_prices, close_prices)
+                await asyncio.sleep(interval_sec)
+                continue
+            else:
+                shared_state["vstop_active"] = False
         else:
-            shared_state["vstop_active"] = False
+            if m == 0:
+                notify_slack(f"[INFO]ミッドナイトモードが有効です。\n 夜間取引を行います、市場の状況により大きな損失が発生する場合があります。")
+                m = 1
 
         if not prices:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
