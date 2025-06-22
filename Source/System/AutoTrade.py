@@ -37,7 +37,7 @@ from Price import extract_price_from_response
 from logs import write_log
 from Assets import assets
 
-night=False
+night = True
 
 shared_state = {
     "trend": None,
