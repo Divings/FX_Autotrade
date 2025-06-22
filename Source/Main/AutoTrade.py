@@ -39,6 +39,33 @@ from Assets import assets
 
 night = True
 
+import numpy as np
+
+def calculate_dmi(highs, lows, closes, period=14):
+    highs = np.array(highs)
+    lows = np.array(lows)
+    closes = np.array(closes)
+
+    plus_dm = np.zeros_like(highs)
+    minus_dm = np.zeros_like(lows)
+
+    for i in range(1, len(highs)):
+        up_move = highs[i] - highs[i-1]
+        down_move = lows[i-1] - lows[i]
+
+        plus_dm[i] = up_move if (up_move > down_move and up_move > 0) else 0
+        minus_dm[i] = down_move if (down_move > up_move and down_move > 0) else 0
+
+    tr = np.maximum(highs[1:] - lows[1:], 
+                    np.maximum(np.abs(highs[1:] - closes[:-1]),
+                               np.abs(lows[1:] - closes[:-1])))
+
+    plus_di = 100 * (np.convolve(plus_dm[1:], np.ones(period), 'valid') / period) / (np.convolve(tr, np.ones(period), 'valid') / period)
+    minus_di = 100 * (np.convolve(minus_dm[1:], np.ones(period), 'valid') / period) / (np.convolve(tr, np.ones(period), 'valid') / period)
+
+    return plus_di, minus_di
+
+
 shared_state = {
     "trend": None,
     "last_trend": None,
@@ -928,7 +955,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             shared_state["RSI"] = rsi
             vstop = 0
-        
+
         if len(close_prices) < 14:
             logging.info(f"[情報] ADX計算に必要なデータ不足 ({len(close_prices)}/14)")
             if not shared_state.get("adx_wait_notice", False):
@@ -1034,13 +1061,25 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             now = datetime.now()
             trend_active = False
 
+            # ここにDMI判定を追加する
+            plus_di, minus_di = calculate_dmi(high_prices, low_prices, close_prices)
+            current_plus_di = plus_di[-1]
+            current_minus_di = minus_di[-1]
+
+            # DMI方向一致判定
+            dmi_trend_match = False
+            if trend == "BUY" and current_plus_di > current_minus_di:
+                dmi_trend_match = True
+            elif trend == "SELL" and current_minus_di > current_plus_di:
+                dmi_trend_match = True
+            
             if "trend_start_time" in shared_state:
                 elapsed = (now - shared_state["trend_start_time"]).total_seconds() / 60.0
                 if elapsed < TREND_HOLD_MINUTES:
                     trend_active = True
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
 
-            if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit:
+            if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match:
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi_str}, ADX={adx_str}）")
@@ -1062,7 +1101,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 else:
                     logging.error("[結果] BUY 失敗")
                 logging.info("[エントリー判定] BUY トレンド確定")
-            elif trend == "SELL" and (macd_bearish or macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 30 and rsi_limit:
+            elif trend == "SELL" and (macd_bearish or macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 30 and rsi_limit and dmi_trend_match:
                 shared_state["trend"] = trend
                 shared_state["trend_start_time"] = datetime.now()
                 notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi_str}, ADX={adx_str}）")
@@ -1082,7 +1121,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info("[結果] SELL 成功")
                     shared_state["last_trend"] = trend
                 else:
-                    
                     logging.error("[結果] SELL 失敗")
                 logging.info("[エントリー判定] SELL トレンド確定")
             elif positions and trend=="SELL" and (macd_bullish or macd_cross_up):
