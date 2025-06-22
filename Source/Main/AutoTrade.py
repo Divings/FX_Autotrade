@@ -65,6 +65,86 @@ def calculate_dmi(highs, lows, closes, period=14):
 
     return plus_di, minus_di
 
+import os
+import shutil
+import requests
+from EncryptSecureDEC import decrypt_file
+
+def download_two_files(base_url, download_dir):
+    filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
+    
+    for filename in filenames:
+        url = f"{base_url}/{filename}"
+        download_path = os.path.join(download_dir, filename)
+        
+        response = requests.get(url, stream=True)
+        if response.status_code != 200:
+            raise Exception(f"Failed to download file {filename}: {response.status_code}")
+        
+        with open(download_path, 'wb') as f:
+            shutil.copyfileobj(response.raw, f)
+        
+        print(f"Downloaded {filename} to {download_path}")
+import os
+import shutil
+import requests
+import lzma
+import hashlib
+import json
+import datetime
+import getpass
+from Crypto.Cipher import AES
+from Crypto.Protocol.KDF import PBKDF2
+
+BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
+
+# ダウンロード関数はそのまま
+def download_two_files(base_url, download_dir):
+    filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
+    for filename in filenames:
+        url = f"{base_url}/{filename}"
+        download_path = os.path.join(download_dir, filename)
+        response = requests.get(url, stream=True)
+        if response.status_code != 200:
+            raise Exception(f"Failed to download file {filename}: {response.status_code}")
+        with open(download_path, 'wb') as f:
+            shutil.copyfileobj(response.raw, f)
+        print(f"Downloaded {filename} to {download_path}")
+
+# API読み込み関数
+def load_api(temp_dir):
+    url = "https://objectstorage.ap-tokyo-1.oraclecloud.com/p/i_Vi4K-Mwqr3mCZTF7skve2UUvq4joWKGfn6UrYDabtR1iFOYyn21LXFKb0fAvge/n/nrwzxiqvwvkf/b/InovationCraft/o/authorize/"
+
+    # パスワードを.envから読み込み
+    password = os.getenv("API_PASSWORD")
+    password2 = os.getenv("SECRET_PASSWORD")
+    if not password or not password2:
+        raise Exception("環境変数 API_PASSWORD または SECRET_PASSWORD が設定されていません")
+
+    download_two_files(url, temp_dir)
+
+    # 復号処理
+    file_path1 = os.path.join(temp_dir, "API.txt.vdec")
+    decrypted_path1 = decrypt_file(file_path1, password)
+
+    file_path2 = os.path.join(temp_dir, "SECRET.txt.vdec")
+    decrypted_path2 = decrypt_file(file_path2, password2)
+
+    # 復号済ファイル読み取り
+    with open(decrypted_path1, 'r', encoding='utf-8') as f:
+        api_data = f.read()
+
+    with open(decrypted_path2, 'r', encoding='utf-8') as f:
+        secret_data = f.read()
+
+    # 復号後のファイルは削除
+    os.remove(file_path1)
+    os.remove(file_path2)
+    os.remove(decrypted_path1)
+    os.remove(decrypted_path2)
+
+    return api_data, secret_data
+
 
 shared_state = {
     "trend": None,
@@ -123,7 +203,10 @@ def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
 
 # ===ログ設定 ===
 LOG_FILE1 = f"{temp_dir}/fx_debug_log.txt"
-_log_last_reset = datetime.now()
+try:
+    _log_last_reset = datetime.now()
+except:
+    _log_last_reset = datetime.datetime.now()
 os.makedirs("last_temp", exist_ok=True)
 now = datetime.now()
 
@@ -403,8 +486,10 @@ def handle_exit(signum, frame):
 
 # === 環境変数の読み込み ===
 conf=load_settings_from_db()
-API_KEY = conf["API_KEY"]
-API_SECRET = conf["API_SECRET"]
+api_data, secret_data=load_api(temp_dir)
+
+API_KEY = api_data.strip()
+API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
