@@ -145,7 +145,6 @@ def load_api(temp_dir):
 
     return api_data, secret_data
 
-
 shared_state = {
     "trend": None,
     "last_trend": None,
@@ -172,12 +171,15 @@ shared_state = {
 
 import configparser
 def load_ini():
-    # ConfigParser オブジェクトを作成
-    config = configparser.ConfigParser()
+    try:
+        # ConfigParser オブジェクトを作成
+        config = configparser.ConfigParser()
 
-    # config.ini を読み込む
-    config.read('config.ini')
-    reset = config.getboolean('settings', 'reset')
+        # config.ini を読み込む
+        config.read('config.ini')
+        reset = config.getboolean('settings', 'reset')
+    except:
+        reset = False
     return reset
 
 reset = load_ini()
