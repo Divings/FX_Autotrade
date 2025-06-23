@@ -121,7 +121,8 @@ def load_api(temp_dir):
     password2 = os.getenv("SECRET_PASSWORD")
     if not password or not password2:
         raise Exception("環境変数 API_PASSWORD または SECRET_PASSWORD が設定されていません")
-    
+    global URL_Auth
+    print(URL_Auth)
     download_two_files(URL_Auth, temp_dir)
 
     # 復号処理
