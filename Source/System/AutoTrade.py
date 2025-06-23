@@ -115,14 +115,12 @@ def download_two_files(base_url, download_dir):
 # API読み込み関数
 def load_api(temp_dir):
     
-
     # パスワードを.envから読み込み
     password = os.getenv("API_PASSWORD")
     password2 = os.getenv("SECRET_PASSWORD")
     if not password or not password2:
         raise Exception("環境変数 API_PASSWORD または SECRET_PASSWORD が設定されていません")
-    global URL_Auth
-    print(URL_Auth)
+
     download_two_files(URL_Auth, temp_dir)
 
     # 復号処理
@@ -489,9 +487,9 @@ def handle_exit(signum, frame):
 
 # === 環境変数の読み込み ===
 conf=load_settings_from_db()
+URL_Auth = conf["URL"]
 api_data, secret_data=load_api(temp_dir)
 
-URL_Auth = conf["URL"]
 API_KEY = api_data.strip()
 API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
