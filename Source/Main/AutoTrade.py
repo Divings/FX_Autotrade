@@ -102,7 +102,7 @@ BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
 def download_two_files(base_url, download_dir):
     filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
     for filename in filenames:
-        url = f"{base_url}/{filename}"
+        url = f"{base_url}{filename}"
         download_path = os.path.join(download_dir, filename)
         response = requests.get(url, stream=True)
         if response.status_code != 200:
@@ -210,7 +210,7 @@ try:
 except:
     _log_last_reset = datetime.datetime.now()
 os.makedirs("last_temp", exist_ok=True)
-now = datetime.now()
+now = datetime.datetime.now()
 
 # フォーマット
 formatted = now.strftime("%Y/%m/%d %H:%M")
