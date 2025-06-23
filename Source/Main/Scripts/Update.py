@@ -12,7 +12,7 @@ text = input(" コードをSystemディレクトリにコピーするには、�
 
 Authcode = sha256_hash = hashlib.sha256(text.encode('utf-8')).hexdigest()
 if hash != Authcode:
-    print("\n 管理者コードが一致しません")
+    print("\n 管理者コードが一致しません ")
     input(" >> ")
     sys.exit(0)
     
