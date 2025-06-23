@@ -12,7 +12,7 @@ BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
 
 class Block:
     def __init__(self, data, previous_hash, operation_type, file_hash, user, memo):
-        self.timestamp = datetime.now(datetime.timezone.utc)
+        self.timestamp = datetime.now(timezone.utc)
         self.data = data
         self.previous_hash = previous_hash
         self.operation_type = operation_type
