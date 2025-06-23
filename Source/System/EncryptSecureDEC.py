@@ -74,7 +74,7 @@ class Blockchain:
                 user=block_data['user'],
                 memo=block_data['memo']
             )
-            block.timestamp = datetime.datetime.strptime(block_data['timestamp'], '%Y-%m-%d %H:%M:%S.%f%z')
+            block.timestamp = datetime.strptime(block_data['timestamp'], '%Y-%m-%d %H:%M:%S.%f%z')
             block.hash = block_data['hash']
             blockchain.chain.append(block)
         return blockchain
