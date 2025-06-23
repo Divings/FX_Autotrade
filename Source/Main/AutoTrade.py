@@ -800,7 +800,7 @@ def close_order(position_id, size, side):
         notify_slack(f"[決済] 失敗: {e}")
         return None
 
-def first_oder(trend,shared_state=None):
+def first_order(trend,shared_state=None):
     positions = get_positions()
     prices = get_price()
     if prices is None:
@@ -853,6 +853,30 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
     return candles
 
+async def process_entry(trend, shared_state, price_buffer,first_order_func,rsi_str,adx_str):
+    shared_state["trend"] = trend
+    shared_state["trend_start_time"] = datetime.now()
+    notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
+
+    candles = build_last_2_candles_from_prices(list(price_buffer))
+    if len(candles) >= 2:
+        skip, reason = should_skip_entry(candles, trend)
+        if skip:
+            shared_state["trend"] = None
+            logging.info(f"[エントリースキップ] {reason}")
+            notify_slack(f"[スキップ] {reason}")
+            await asyncio.sleep(3)
+            return
+
+    a = first_order(trend, shared_state)
+    if a == 2:
+        logging.info(f"[結果] {trend} すでにポジションあり")
+    elif a == 1:
+        logging.info(f"[結果] {trend} 成功")
+        shared_state["last_trend"] = trend
+    else:
+        logging.error(f"[結果] {trend} 失敗")
+    logging.info(f"[エントリー判定] {trend} トレンド確定")
 
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
@@ -1106,7 +1130,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     except:
                         pass
                     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
-                    a=first_oder(trend,shared_state)
+                    a=first_order(trend,shared_state)
                     if a==2:
                         logging.info(f"[結果] {trend} すでにポジションあり")
                     elif a==1:
@@ -1160,6 +1184,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             elif trend == "SELL" and current_minus_di > current_plus_di:
                 dmi_trend_match = True
             
+            logging.info(f"[INFO] DMI TREND {dmi_trend_match}")
+
             if "trend_start_time" in shared_state:
                 elapsed = (now - shared_state["trend_start_time"]).total_seconds() / 60.0
                 if elapsed < TREND_HOLD_MINUTES:
@@ -1167,31 +1193,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
 
             if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match:
-                shared_state["trend"] = trend
-                shared_state["trend_start_time"] = datetime.now()
-                notify_slack(f"[トレンド] MACDクロスBUY（RSI={rsi_str}, ADX={adx_str}）")
-                candles = build_last_2_candles_from_prices(list(price_buffer))
-                if len(candles) >= 2:
-                    skip, reason = should_skip_entry(candles, trend)
-                    if skip:
-                        shared_state["trend"] = None
-                        logging.info(f"[エントリースキップ] {reason}")
-                        notify_slack(f"[スキップ] {reason}")
-                        await asyncio.sleep(interval_sec)
-                        continue
-                a=first_oder(trend,shared_state)
-                if a==2:
-                    logging.info("[結果] BUY すでにポジションあり")
-                elif a==1:
-                    logging.info("[結果] BUY 成功")
-                    shared_state["last_trend"] = trend
-                else:
-                    logging.error("[結果] BUY 失敗")
-                logging.info("[エントリー判定] BUY トレンド確定")
+                await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str)
             elif trend == "SELL" and (macd_bearish or macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 30 and rsi_limit and dmi_trend_match:
-                shared_state["trend"] = trend
-                shared_state["trend_start_time"] = datetime.now()
-                notify_slack(f"[トレンド] MACDクロスSELL（RSI={rsi_str}, ADX={adx_str}）")
+                await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str)
+            elif positions and trend == "SELL" and (macd_bullish or macd_cross_up):
+                notify_slack(f"[トレンド] トレンド反転 即時損切り")
                 candles = build_last_2_candles_from_prices(list(price_buffer))
                 if len(candles) >= 2:
                     skip, reason = should_skip_entry(candles, trend)
@@ -1201,40 +1207,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         notify_slack(f"[スキップ] {reason}")
                         await asyncio.sleep(interval_sec)
                         continue
-                a=first_oder(trend,shared_state)
-                if a==2:
-                    logging.info("[結果] SELL すでにポジションあり")
-                elif a==1:
-                    logging.info("[結果] SELL 成功")
-                    shared_state["last_trend"] = trend
-                else:
-                    logging.error("[結果] SELL 失敗")
-                logging.info("[エントリー判定] SELL トレンド確定")
-            elif positions and trend=="SELL" and (macd_bullish or macd_cross_up):
-                notify_slack(f"[トレンド] トレンド反転と思われる挙動を検知 即時損切り")
-                candles = build_last_2_candles_from_prices(list(price_buffer))
-                if len(candles) >= 2:
-                    skip, reason = should_skip_entry(candles, trend)
-                    if skip:
-                        shared_state["trend"] = None
-                        logging.info(f"[エントリースキップ] {reason}")
-                        notify_slack(f"[スキップ] {reason}")
-                        await asyncio.sleep(interval_sec)
-                        continue
+
                     pid = positions["positionId"]
                     size_str = int(positions["size"])
                     side = positions.get("side", "BUY").upper()
                     close_side = "SELL" if side == "BUY" else "BUY"
                     close_order(pid, size_str, close_side)
                     write_log(close_side, bid)
-                if a==2:
-                    logging.info("[結果] SELL すでにポジションあり")
-                elif a==1:
-                    logging.info("[結果] SELL 成功")
-                    shared_state["last_trend"] = trend
-                else:
-                    
-                    logging.error("[結果] SELL 失敗")
             else:
                 shared_state["trend"] = None
                 notify_slack(f"[スキップ] MACDクロス未検出のためスキップ（RSI={rsi_str}, ADX={adx_str}, MACD={macd_str}, Signal={signal_str}）")
