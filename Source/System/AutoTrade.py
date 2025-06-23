@@ -410,7 +410,6 @@ def load_config_from_mysql():
 # == 損益即時監視用タスク ==
 async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
     SLIPPAGE_BUFFER = 5  # 許容スリッページ（円）
-    
     while not stop_event.is_set():
         positions = get_positions()
         prices = get_price()
