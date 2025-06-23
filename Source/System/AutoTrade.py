@@ -121,8 +121,8 @@ def load_api(temp_dir):
     password2 = os.getenv("SECRET_PASSWORD")
     if not password or not password2:
         raise Exception("環境変数 API_PASSWORD または SECRET_PASSWORD が設定されていません")
-
-    download_two_files(URL, temp_dir)
+    
+    download_two_files(URL_Auth, temp_dir)
 
     # 復号処理
     file_path1 = os.path.join(temp_dir, "API.txt.vdec")
@@ -490,7 +490,7 @@ def handle_exit(signum, frame):
 conf=load_settings_from_db()
 api_data, secret_data=load_api(temp_dir)
 
-URL=conf["URL"]
+URL_Auth = conf["URL"]
 API_KEY = api_data.strip()
 API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
