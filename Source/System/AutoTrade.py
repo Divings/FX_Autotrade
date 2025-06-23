@@ -855,7 +855,7 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
 async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
     shared_state["trend"] = trend
-    shared_state["trend_start_time"] = datetime.now()
+    shared_state["trend_start_time"] = datetime.datetime.now()
     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
 
     candles = build_last_2_candles_from_prices(list(price_buffer))
