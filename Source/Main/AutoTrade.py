@@ -38,7 +38,7 @@ from logs import write_log
 from Assets import assets
 
 night = True
-
+mi = 1
 import numpy as np
 
 def calculate_dmi(highs, lows, closes, period=14):
