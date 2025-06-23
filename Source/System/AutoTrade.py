@@ -1233,7 +1233,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 # == 即時利確監視用タスク ==
 async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
     PROFIT_BUFFER = 5  # 利確ラインに対する安全マージン
-
+    SLIPPAGE_BUFFER = 5  # 許容スリッページ（円）
     while not stop_event.is_set():
         positions = get_positions()
         prices = get_price()
@@ -1261,7 +1261,16 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             # 利確ライン（スリッページ考慮）
             short_term_target = 10 + PROFIT_BUFFER
             long_term_target = 30 + PROFIT_BUFFER
+            bid = prices["bid"]
+            ask = prices["ask"]
+            #mid = (ask + bid) / 2
 
+            spread = ask - bid
+            
+            if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
+                if spread > MAX_SPREAD:
+                    notify_slack(f"[即時利確保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切/利確タイミングに注意")
+                    continue
             if (elapsed <= 60 and profit >= short_term_target) or (elapsed > 60 and profit >= long_term_target):
                 notify_slack(f"[即時利確] 利益が {profit} 円（{elapsed:.1f}秒保持）→ 決済実行")
 
