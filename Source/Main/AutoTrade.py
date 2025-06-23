@@ -85,6 +85,7 @@ def download_two_files(base_url, download_dir):
             shutil.copyfileobj(response.raw, f)
         
         print(f"Downloaded {filename} to {download_path}")
+        
 import os
 import shutil
 import requests
