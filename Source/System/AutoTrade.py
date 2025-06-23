@@ -38,7 +38,7 @@ from logs import write_log
 from Assets import assets
 
 night = True
-mi = 1
+
 import numpy as np
 
 def calculate_dmi(highs, lows, closes, period=14):
@@ -894,7 +894,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     xstop = 0
     trend = shared_state.get("trend",None)
     
-
+    VOL_THRESHOLD_SHORT = 0.006
+    VOL_THRESHOLD_LONG = 0.008
+    
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
@@ -1157,8 +1159,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.info("[スキップ] RSI下限で警戒")
             await asyncio.sleep(interval_sec)
             continue
-                      
-        if statistics.stdev(list(price_buffer)[-5:]) > VOL_THRESHOLD:
+        short_stdev = statistics.stdev(list(price_buffer)[-5:])
+        long_stdev = statistics.stdev(list(price_buffer)[-20:])
+        
+        if short_stdev > VOL_THRESHOLD_SHORT and long_stdev > VOL_THRESHOLD_LONG:
             
             trend = "BUY" if diff > 0 else "SELL"
             if adx < 20:
