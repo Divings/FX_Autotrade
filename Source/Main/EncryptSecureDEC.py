@@ -4,7 +4,7 @@ import sys
 import lzma
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import PBKDF2
 
