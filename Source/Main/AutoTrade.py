@@ -500,10 +500,10 @@ available_amount = int(float(out['data']['availableAmount']))
 notify_slack(f"現在の取引余力は{available_amount}円です。")
 
 def notify_asset():
+    out=assets(API_KEY,API_SECRET)
     available_amount = int(float(out['data']['availableAmount']))
     balance = int(float(out['data']['balance']))
 
-    out=assets(API_KEY,API_SECRET)
     notify_slack(f"現在の取引余力は{available_amount}円です。\n 現在の現金残高は{balance}円です。")
     return 0
 
@@ -889,7 +889,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
     global price_buffer
     # price_buffer = deque(maxlen=240)
-
+    global MAX_SPREAD
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
     trend = shared_state.get("trend",None)
@@ -977,6 +977,19 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             if m == 0:
                 notify_slack(f"[INFO]ミッドナイトモードが有効です。\n 夜間取引を行います、市場の状況により大きな損失が発生する場合があります。")
                 m = 1
+        
+
+        from datetime import datetime, timezone
+
+        now =  datetime.now(timezone.utc)
+
+        # 日本時間（UTC+9）に換算
+        hour_jst = (now.hour + 9) % 24
+
+        if 9 <= hour_jst <= 22:
+            MAX_SPREAD = 0.03  # 日中は今のまま
+        else:
+            MAX_SPREAD = 0.007  # 夜間は厳しめ
 
         if not prices:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
