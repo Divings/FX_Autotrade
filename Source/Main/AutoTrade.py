@@ -962,6 +962,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     timestop = 0
     m = 0
     s = 0
+
+    m_note = 0
     while not stop_event.is_set():
         positions = get_positions()    
         if shared_state.get("cmd") == "save_adx":
@@ -1017,6 +1019,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 s = 0
         if night != True:
             if now.hour >= TIME_STOP or now.hour < 5:
+                midnight = False
                 if not shared_state.get("vstop_active", False):                   
                     notify_slack(f"[クールダウン] {str(TIME_STOP)}時以降のため自動売買スキップ")
                     logging.info(f"[時間制限] {str(TIME_STOP)}時以降の取引スキップ")
@@ -1031,6 +1034,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             else:
                 shared_state["vstop_active"] = False
         else:
+            midnight = True
             if m == 0:
                 notify_slack(f"[INFO]ミッドナイトモードが有効です。\n 夜間取引を行います、市場の状況により大きな損失が発生する場合があります。")
                 m = 1
@@ -1178,6 +1182,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 await asyncio.sleep(interval_sec)
                 continue
         
+        if midnight == True and adx < 50:
+            if m_note == 0:
+                notify_slack(f"[INFO] ミッドナイトモード中だが、ADXが低いのでスキップ ADX={adx_str}")
+                m_note = 1
+            continue
+        else:
+            m_note = 0
+
         today_str = datetime.now().strftime("%Y-%m-%d")
         if adx >= 95:
             # 無効化（非常事態）
