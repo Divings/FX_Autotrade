@@ -41,6 +41,11 @@ night = True
 
 import numpy as np
 
+def calculate_range(candles, period=10):
+    highs = [candle['high'] for candle in candles[-period:]]
+    lows  = [candle['low'] for candle in candles[-period:]]
+    return max(highs) - min(lows)
+
 def calculate_dmi(highs, lows, closes, period=14):
     highs = np.array(highs)
     lows = np.array(lows)
@@ -550,7 +555,7 @@ def verify_signature(gpg_home, signature_file, update_file):
         capture_output=True, text=True
     )
     if result.returncode != 0:
-        notify_slack("署名検証失敗！アップデート中止")
+        notify_slack("署名検証失敗！起動中止")
         print(result.stdout)
         print(result.stderr)
         sys.exit(1)
@@ -1172,6 +1177,18 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[MACD] クロス判定: UP={macd_cross_up}, DOWN={macd_cross_down}")
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         
+
+        range_value = calculate_range(candles, period=10)
+        if adx >= 20 and range_value >= 0.1:
+            pass
+        else:
+            trend = None
+            shared_state["trend"] = None
+            notify_slack(f"[横ばい判定] 価格変動幅が小さい（{price_range:.4f}）ためスキップ")
+            logging.info("[スキップ] 価格横ばい")
+            await asyncio.sleep(interval_sec)
+            continue
+        
         if len(close_prices) >= 5:
             price_range = max(close_prices) - min(close_prices)
             if price_range < 0.03:
@@ -1278,9 +1295,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     trend_active = True
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
 
-            if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match:
+            if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match and plus_di > minus_di:
                 await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str)
-            elif trend == "SELL" and (macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
+            elif trend == "SELL" and (macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010 and minus_di > plus_di:
                 await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str)
             elif positions and trend == "SELL" and (macd_bullish or macd_cross_up):
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
