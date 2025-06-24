@@ -967,7 +967,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     timestop = 0
     m = 0
     s = 0
-
+    n_nonce = 0
     m_note = 0
     while not stop_event.is_set():
         positions = get_positions()    
@@ -1185,8 +1185,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             trend = None
             shared_state["trend"] = None
-            notify_slack(f"[横ばい判定] 価格変動幅が小さい）ためスキップ")
-            logging.info("[スキップ] 価格横ばい")
+            if n_nonce == 0:
+                notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
+                logging.info("[スキップ] 価格横ばい")
+                n_nonce = 1
             await asyncio.sleep(interval_sec)
             continue
         
@@ -1253,7 +1255,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                             notify_slack(f"[情報] MACDクロス無視してエントリーだが、9時以降なのでスキップ")
                             logging.info("[情報] MACDクロス無視してエントリーだが、9時以降なのでスキップ")
                         timestop = 1
-
+        n_nonce = 0
         if rsi < 20:
             notify_slack(f"[RSI下限] RSI={rsi_str} → 反発警戒でスキップ")
             logging.info("[スキップ] RSI下限で警戒")
