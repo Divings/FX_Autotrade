@@ -317,7 +317,7 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             side = pos.get("side", "BUY").upper()
 
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
-            if elapsed > 240:
+            if elapsed > 300:
                 notify_slack(f"注意! 保有時間が長すぎます\n 強制決済を発動します {profit}")
                 rside=reverse_side(side) 
                 close_order(pid,size,rside)
