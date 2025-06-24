@@ -532,7 +532,7 @@ def verify_signature(gpg_home, signature_file, update_file):
     """署名検証"""
     result = subprocess.run(
         ['gpg', '--homedir', gpg_home, '--verify', signature_file, update_file],
-        capture_output=False, text=True
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
     if result.returncode != 0:
         notify_slack("署名検証失敗！起動中止")
@@ -553,7 +553,7 @@ def verify_signature(gpg_home, signature_file, update_file):
     """署名検証"""
     result = subprocess.run(
         ['gpg', '--homedir', gpg_home, '--verify', signature_file, update_file],
-        capture_output=False, text=True
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
     if result.returncode != 0:
         notify_slack("署名検証失敗！起動中止")
