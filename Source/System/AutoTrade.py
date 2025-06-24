@@ -42,6 +42,8 @@ night = True
 import numpy as np
 
 def calculate_range(candles, period=10):
+    if len(candles) < period:
+        return 0  # または None でもOK
     highs = [candle['high'] for candle in candles[-period:]]
     lows  = [candle['low'] for candle in candles[-period:]]
     return max(highs) - min(lows)
@@ -1039,8 +1041,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             else:
                 shared_state["vstop_active"] = False
         else:
-            midnight = True
-            if m == 0:
+            if now.hour >= 21:
+                midnight = True
+                m = 0
+            elif now.hour >= 4:
+                midnight = False
+                m = 1
+            if m == 0 and midnight==False:
                 notify_slack(f"[INFO]ミッドナイトモードが有効です。\n 夜間取引を行います、市場の状況により大きな損失が発生する場合があります。")
                 m = 1
         
