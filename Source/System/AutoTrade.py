@@ -1295,9 +1295,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     trend_active = True
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
 
-            if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match or plus_di > minus_di:
+            if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match:
                 await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str)
-            elif trend == "SELL" and (macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010 or minus_di > plus_di:
+            elif trend == "SELL" and (macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
                 await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str)
             elif positions and trend == "SELL" and (macd_bullish or macd_cross_up):
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
