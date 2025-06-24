@@ -1183,7 +1183,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 continue
         
         if midnight == True and adx < 50:
-            if m_note == 0:
+            if m_note == 0 and now.hour >= 21:
                 notify_slack(f"[INFO] ミッドナイトモード中だが、ADXが低いのでスキップ ADX={adx_str}")
                 m_note = 1
             continue
