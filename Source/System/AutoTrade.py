@@ -181,7 +181,6 @@ def load_ini():
     try:
         # ConfigParser オブジェクトを作成
         config = configparser.ConfigParser()
-
         # config.ini を読み込む
         config.read('config.ini')
         reset = config.getboolean('settings', 'reset')
