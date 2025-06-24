@@ -499,6 +499,63 @@ out = assets(API_KEY,API_SECRET)
 available_amount = int(float(out['data']['availableAmount']))
 notify_slack(f"現在の取引余力は{available_amount}円です。")
 
+import os
+import requests
+import subprocess
+import sys
+
+# パラメータ設定
+PUBLIC_KEY_URL = URL_Auth + "key/publickey.asc"
+PUBLIC_KEY_FILE = "/opt/gpg/publickey.asc"
+UPDATE_FILE = "AutoTrade.py"
+SIGNATURE_FILE = "AutoTrade.py.sig"
+
+def download_public_key(url, save_path):
+    """公開鍵をダウンロードして保存"""
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        with open(save_path, 'wb') as f:
+            f.write(response.content)
+        print("公開鍵をダウンロードしました")
+    except Exception as e:
+        notify_slack(f"公開鍵ダウンロード失敗: {str(e)}")
+        sys.exit(1)
+
+def verify_signature(gpg_home, signature_file, update_file):
+    """署名検証"""
+    result = subprocess.run(
+        ['gpg', '--homedir', gpg_home, '--verify', signature_file, update_file],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        notify_slack("署名検証失敗！起動中止")
+        print(result.stdout)
+        print(result.stderr)
+        subprocess.run("systemctl stop fx-autotrade.service")
+
+def import_public_key(gpg_home, key_path):
+    """公開鍵をGPGにインポート"""
+    try:
+        subprocess.run(['gpg', '--homedir', gpg_home, '--import', key_path], check=True)
+        print("公開鍵をインポートしました")
+    except subprocess.CalledProcessError:
+        notify_slack("公開鍵インポート失敗")
+        sys.exit(1)
+
+def verify_signature(gpg_home, signature_file, update_file):
+    """署名検証"""
+    result = subprocess.run(
+        ['gpg', '--homedir', gpg_home, '--verify', signature_file, update_file],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        notify_slack("署名検証失敗！アップデート中止")
+        print(result.stdout)
+        print(result.stderr)
+        sys.exit(1)
+    print("署名検証成功")
+
 def notify_asset():
     out=assets(API_KEY,API_SECRET)
     available_amount = int(float(out['data']['availableAmount']))
@@ -1445,6 +1502,10 @@ async def auto_trade():
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_quick_profit タスク終了")
 if __name__ == "__main__":
+    public_key_path = os.path.join(temp_dir, "publickey.asc")
+    download_public_key(PUBLIC_KEY_URL, public_key_path)
+    import_public_key(temp_dir, public_key_path)
+    verify_signature(temp_dir, SIGNATURE_FILE, UPDATE_FILE)
     try:
         asyncio.run(auto_trade())
     except SystemExit as e:
