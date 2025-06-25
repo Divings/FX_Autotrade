@@ -970,6 +970,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     s = 0
     n_nonce = 0
     m_note = 0
+    nn_nonce = 0
     while not stop_event.is_set():
         positions = get_positions()    
         if shared_state.get("cmd") == "save_adx":
@@ -1187,9 +1188,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         range_value = calculate_range(candles, period=10)
         if adx >= 20 and range_value >= 0.1:
-            pass
+            if nn_nonce == 0:
+                notify_slack(f"[横ばい判定]　価格が動き始めました")
+                logging.info("[スキップ] 価格が動き始め")
+                nn_nonce = 1
         else:
             trend = None
+            nn_nonce = 0
             shared_state["trend"] = None
             if n_nonce == 0:
                 notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
