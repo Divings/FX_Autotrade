@@ -43,7 +43,7 @@ import numpy as np
 
 def calculate_range(candles, period=10):
     if len(candles) < period:
-        return 0  # または None でもOK
+        return None  # または None でもOK
     highs = [candle['high'] for candle in candles[-period:]]
     lows  = [candle['low'] for candle in candles[-period:]]
     return max(highs) - min(lows)
@@ -1185,23 +1185,24 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         
         candles = build_last_2_candles_from_prices(list(price_buffer))
-        
+        logging.info(f"[INFO] キャンドルデータ {candles}")
         range_value = calculate_range(candles, period=10)
-        if adx >= 20 and range_value >= 0.1:
-            if nn_nonce == 0:
-                notify_slack(f"[横ばい判定]　価格が動き始めました")
-                logging.info("[スキップ] 価格が動き始め")
-                nn_nonce = 1
-        else:
-            trend = None
-            nn_nonce = 0
-            shared_state["trend"] = None
-            if n_nonce == 0:
-                notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
-                logging.info("[スキップ] 価格横ばい")
-                n_nonce = 1
-            await asyncio.sleep(interval_sec)
-            continue
+        if range_value != None:
+            if adx >= 20 and range_value >= 0.1:
+                if nn_nonce == 0:
+                    notify_slack(f"[横ばい判定] 価格が動き始めました")
+                    logging.info("[スキップ] 価格が動き始め")
+                    nn_nonce = 1
+            else:
+                trend = None
+                nn_nonce = 0
+                shared_state["trend"] = None
+                if n_nonce == 0:
+                    notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
+                    logging.info("[スキップ] 価格横ばい")
+                    n_nonce = 1
+                await asyncio.sleep(interval_sec)
+                continue
         
         if len(close_prices) >= 5:
             price_range = max(close_prices) - min(close_prices)
