@@ -117,7 +117,7 @@ def download_two_files(base_url, download_dir):
             raise Exception(f"Failed to download file {filename}: {response.status_code}")
         with open(download_path, 'wb') as f:
             shutil.copyfileobj(response.raw, f)
-        print(f"Downloaded {filename} to {download_path}")
+        # print(f"Downloaded {filename} to {download_path}")
 
 # API読み込み関数
 def load_api(temp_dir):
@@ -523,7 +523,7 @@ def download_public_key(url, save_path):
         response.raise_for_status()
         with open(save_path, 'wb') as f:
             f.write(response.content)
-        print("公開鍵をダウンロードしました")
+        # print("公開鍵をダウンロードしました")
     except Exception as e:
         notify_slack(f"公開鍵ダウンロード失敗: {str(e)}")
         sys.exit(1)
@@ -543,8 +543,8 @@ def verify_signature(gpg_home, signature_file, update_file):
 def import_public_key(gpg_home, key_path):
     """公開鍵をGPGにインポート"""
     try:
-        subprocess.run(['gpg', '--homedir', gpg_home, '--import', key_path], check=True)
-        print("公開鍵をインポートしました")
+        subprocess.run(['gpg', '--homedir', gpg_home, '--import', key_path], check=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # print("公開鍵をインポートしました")
     except subprocess.CalledProcessError:
         notify_slack("公開鍵インポート失敗")
         sys.exit(1)

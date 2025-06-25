@@ -33,6 +33,6 @@ async def start_socket_server(shared_state, host='127.0.0.1', port=8888):
         await handle_client(reader, writer, shared_state)
 
     server = await asyncio.start_server(handler, host, port)
-    print(f"[待機中] ソケットサーバー {host}:{port}")
+    print(f"[待機中] 内部サーバー準備完了")
     async with server:
         await server.serve_forever()
