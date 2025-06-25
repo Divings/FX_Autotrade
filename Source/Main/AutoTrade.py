@@ -1309,6 +1309,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if elapsed < TREND_HOLD_MINUTES:
                     trend_active = True
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
+            
+
+            # BUY用条件判定
+            macd_buy_ok = (macd_bullish or macd_cross_up)
+            sma_buy_ok = sma_cross_up
+            rsi_buy_ok = (rsi < 70)
+            dmi_buy_ok = dmi_trend_match
+
+            # SELL用条件判定
+            macd_sell_ok = macd_cross_down
+            sma_sell_ok = sma_cross_down
+            rsi_sell_ok = (rsi > 35)
+            stdev_sell_short_ok = statistics.stdev(list(price_buffer)[-5:]) >= 0.007
+            stdev_sell_long_ok  = statistics.stdev(list(price_buffer)[-20:]) >= 0.010
+            dmi_sell_ok = dmi_trend_match
+
 
             if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match:
                 await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str)
@@ -1333,9 +1349,37 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     close_order(pid, size_str, close_side)
                     write_log(close_side, bid)
             else:
-                shared_state["trend"] = None
-                notify_slack(f"[スキップ] MACDクロス未検出のためスキップ（RSI={rsi_str}, ADX={adx_str}, MACD={macd_str}, Signal={signal_str}）")
-                logging.info("[スキップ] MACDクロスなし")
+                    shared_state["trend"] = None
+
+                # BUY側 or SELL側で通知を分ける
+                    if trend == "BUY":
+                        if not (macd_bullish or macd_cross_up):
+                            notify_slack(f"[スキップ] BUY側でMACDクロス未検出（MACD={macd_str}, Signal={signal_str}）")
+                        if not sma_cross_up:
+                            notify_slack(f"[スキップ] BUY側でSMAクロス未検出")
+                        if rsi >= 70:
+                            notify_slack(f"[スキップ] BUY側でRSI上限超過（RSI={rsi_str}）")
+                        if not rsi_limit:
+                            notify_slack(f"[スキップ] BUY側でRSI許容範囲外")
+                        if not dmi_trend_match:
+                            notify_slack(f"[スキップ] BUY側でDMI方向不一致")
+                    elif trend == "SELL":
+                        if not macd_cross_down:
+                            notify_slack(f"[スキップ] SELL側でMACDクロス未検出（MACD={macd_str}, Signal={signal_str}）")
+                        if not sma_cross_down:
+                            notify_slack(f"[スキップ] SELL側でSMAクロス未検出")
+                        if rsi <= 35:
+                            notify_slack(f"[スキップ] SELL側でRSI下限未達（RSI={rsi_str}）")
+                        if not rsi_limit:
+                            notify_slack(f"[スキップ] SELL側でRSI許容範囲外")
+                        if not dmi_trend_match:
+                            notify_slack(f"[スキップ] SELL側でDMI方向不一致")
+                        short_stdev = statistics.stdev(list(price_buffer)[-5:])
+                        long_stdev  = statistics.stdev(list(price_buffer)[-20:])
+                        if short_stdev < 0.007 or long_stdev < 0.010:
+                             notify_slack(f"[スキップ] SELL側でボラティリティ不足（short_stdev={short_stdev:.5f}, long_stdev={long_stdev:.5f}）")
+        else:
+            notify_slack(f"[スキップ] trend未定義（不明な分岐）")
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         
         if shared_state.get("cmd") == "save_adx":
