@@ -173,7 +173,8 @@ shared_state = {
     "forced_entry_date":False,
     "cmd":None,
     "trend_start_time":None,
-    "oders_error":False
+    "oders_error":False,
+    "last_skip_hash":None
 }
 
 import configparser
@@ -959,7 +960,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     
     VOL_THRESHOLD_SHORT = 0.006
     VOL_THRESHOLD_LONG = 0.008
-    
+    import hashlib
+
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
@@ -1351,35 +1353,50 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             else:
                     shared_state["trend"] = None
 
-                # BUY側 or SELL側で通知を分ける
+                    ng_reasons = []
                     if trend == "BUY":
-                        if not (macd_bullish or macd_cross_up):
-                            notify_slack(f"[スキップ] BUY側でMACDクロス未検出（MACD={macd_str}, Signal={signal_str}）")
-                        if not sma_cross_up:
-                            notify_slack(f"[スキップ] BUY側でSMAクロス未検出")
-                        if rsi >= 70:
-                            notify_slack(f"[スキップ] BUY側でRSI上限超過（RSI={rsi_str}）")
-                        if not rsi_limit:
-                            notify_slack(f"[スキップ] BUY側でRSI許容範囲外")
-                        if not dmi_trend_match:
-                            notify_slack(f"[スキップ] BUY側でDMI方向不一致")
+                        macd_ok = (macd_bullish or macd_cross_up)
+                        sma_ok = sma_cross_up
+                        rsi_ok = (rsi < 70)
+                        dmi_ok = dmi_trend_match
+                        stdev_ok = True  # BUY側はstdev条件なし
+
                     elif trend == "SELL":
-                        if not macd_cross_down:
-                            notify_slack(f"[スキップ] SELL側でMACDクロス未検出（MACD={macd_str}, Signal={signal_str}）")
-                        if not sma_cross_down:
-                            notify_slack(f"[スキップ] SELL側でSMAクロス未検出")
-                        if rsi <= 35:
-                            notify_slack(f"[スキップ] SELL側でRSI下限未達（RSI={rsi_str}）")
-                        if not rsi_limit:
-                            notify_slack(f"[スキップ] SELL側でRSI許容範囲外")
-                        if not dmi_trend_match:
-                            notify_slack(f"[スキップ] SELL側でDMI方向不一致")
-                        short_stdev = statistics.stdev(list(price_buffer)[-5:])
-                        long_stdev  = statistics.stdev(list(price_buffer)[-20:])
-                        if short_stdev < 0.007 or long_stdev < 0.010:
-                             notify_slack(f"[スキップ] SELL側でボラティリティ不足（short_stdev={short_stdev:.5f}, long_stdev={long_stdev:.5f}）")
+                        macd_ok = macd_cross_down
+                        sma_ok = sma_cross_down
+                        rsi_ok = (rsi > 35)
+                        dmi_ok = dmi_trend_match
+                        stdev_ok = (short_stdev >= 0.007 and long_stdev >= 0.010)
+
+                    if not macd_ok:
+                        ng_reasons.append("MACD")
+                    if not sma_ok:
+                        ng_reasons.append("SMA")
+                    if not rsi_ok:
+                        ng_reasons.append("RSI")
+                    if not dmi_ok:
+                        ng_reasons.append("DMI")
+                    if trend == "SELL" and not stdev_ok:
+                        ng_reasons.append("ボラ")
+                    if ng_reasons:
+                        notify_message = f"[スキップ] {trend}側 条件未達: {', '.join(ng_reasons)}"
+    
+                        # SHA256計算
+                        hash_digest = hashlib.sha256(notify_message.encode()).hexdigest()
+    
+                        if hash_digest != shared_state.get("last_skip_hash"):
+                            notify_slack(notify_message)
+                            shared_state["last_skip_hash"] = hash_digest
+                        else:
+                            logging.info("[スキップ] 同一理由でスキップ → 通知抑制")
+    
+                        shared_state["trend"] = None
+                    else:
+                        shared_state["last_skip_hash"] = None  # エントリー成功時はリセット
+                        notify_slack(f"[スキップ] {trend}側 条件未達: {', '.join(ng_reasons)}")
         else:
-            notify_slack(f"[スキップ] trend未定義（不明な分岐）")
+            if not trend is None:
+                notify_slack(f"[スキップ] trend未定義（不明な分岐）")
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         
         if shared_state.get("cmd") == "save_adx":
