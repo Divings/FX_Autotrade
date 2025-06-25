@@ -1312,22 +1312,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     trend_active = True
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
             
-
-            # BUY用条件判定
-            macd_buy_ok = (macd_bullish or macd_cross_up)
-            sma_buy_ok = sma_cross_up
-            rsi_buy_ok = (rsi < 70)
-            dmi_buy_ok = dmi_trend_match
-
-            # SELL用条件判定
-            macd_sell_ok = macd_cross_down
-            sma_sell_ok = sma_cross_down
-            rsi_sell_ok = (rsi > 35)
-            stdev_sell_short_ok = statistics.stdev(list(price_buffer)[-5:]) >= 0.007
-            stdev_sell_long_ok  = statistics.stdev(list(price_buffer)[-20:]) >= 0.010
-            dmi_sell_ok = dmi_trend_match
-
-
             if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match:
                 await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str)
             elif trend == "SELL" and (macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
@@ -1395,8 +1379,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         shared_state["last_skip_hash"] = None  # エントリー成功時はリセット
                         notify_slack(f"[スキップ] {trend}側 条件未達: {', '.join(ng_reasons)}")
         else:
-            if not trend is None:
-                notify_slack(f"[スキップ] trend未定義（不明な分岐）")
+            if  (trend is not None) and trend != "BUY" and trend != "SELL":
+                notify_slack(f"[スキップ] trend未定義（不明な分岐）{trend}")
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         
         if shared_state.get("cmd") == "save_adx":
