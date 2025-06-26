@@ -1254,6 +1254,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     elif a==1:
                         logging.info(f"[結果] {trend} 成功")
                         shared_state["oders_error"]=False
+                        shared_state["forced_entry_date"] = today_str
                     else:
                         logging.error(f"[結果] {trend} 失敗")
                     if a==1:
