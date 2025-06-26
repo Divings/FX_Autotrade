@@ -1,13 +1,15 @@
 # AutoTrade.py - GMOコインFX 自動売買ボット
 
-このリポジトリは、GMOコインの外国為替（FX）APIを用いた自動売買プログラムを提供します。主に USD/JPY を対象とし、移動平均線を使ったトレンド判定および損益基準による自動売買を行います。
+このリポジトリは、GMOコインの外国為替（FX）APIを用いた自動売買プログラムを提供します。
+主に USD/JPY を対象とし、移動平均線を使ったトレンド判定および損益基準による自動売買を行います。
 
 ## 📁 フォルダ構成
 
 ```
 Source
 ├── Backup        # バックアップコード（旧バージョンなど）
-├── Main          # メインのトレードロジック（AutoTrade.py）
+├── Main          # 開発版のトレードロジック（AutoTrade.py）
+├── System        # 本番環境用のトレードロジック
 └── Util          # 補助スクリプト（署名ツール・設定補助など）
 ```
 
@@ -66,6 +68,7 @@ API_SECRET=あなたのAPIシークレット
 - 本ツールは実際の資金を使った売買を行います。必ず十分なテストと理解を持ってご使用ください。
 - テスト用途ではデモAPIがないため、実環境APIキーを使用する必要があります。
 - 実行中は Ctrl+C で停止してください。
+- このコードの不正な利用に伴う資金的な損失等、Innovation Craft Inc.は補償しませんのでご注意ください
 
 ## 📄 ライセンス
 This software is currently provided under a proprietary license. The previous version was under the MIT license, but all versions after April 12, 2025, will have restrictions on commercial use, redistribution, and modification.
