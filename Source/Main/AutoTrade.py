@@ -936,7 +936,7 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
     if a == 2:
         logging.info(f"[結果] {trend} すでにポジションあり")
     elif a == 1:
-        logging.info(f"[結果] {trend} 成功")
+        logging.info(f"[結果] {trend}  取引　成功")
         shared_state["last_trend"] = trend
     else:
         logging.error(f"[結果] {trend} 失敗")
@@ -1565,6 +1565,7 @@ async def auto_trade():
             await asyncio.sleep(CHECK_INTERVAL)
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
+        shutil.rmtree(temp_dir)
     except Exception as e:
         notify_slack(f"[致命的エラー] auto_trade() にて {type(e).__name__}: {e}")
         logging.exception("auto_tradeで例外が発生しました")
