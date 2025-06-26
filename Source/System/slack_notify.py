@@ -32,8 +32,9 @@ def notify_slack(message: str):
     now = time.time()
     last_sent = _last_notify_times.get(message)
     if last_sent and (now - last_sent < _NOTIFY_COOLDOWN_SECONDS):
-        # 通知制限中
-        print(f"[Slack通知制限] メッセージ送信抑制: {message}")
+        log_message = f"[Slack通知制限] メッセージ送信抑制: {message}（{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))}）\n"
+        with open("notification_log.txt", "a", encoding="utf-8") as f:
+            f.write(log_message)
         return
     _last_notify_times[message] = now
 
