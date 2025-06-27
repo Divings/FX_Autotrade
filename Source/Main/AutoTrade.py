@@ -993,9 +993,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         today = datetime.now()
         weekday_number = today.weekday()
-        if is_market_open() != "OPEN" or weekday_number == 6 or weekday_number == 5:
+        status_market = is_market_open()
+        if status_market != "OPEN" or weekday_number == 6 or weekday_number == 5:
             if sstop == 0:
-                notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
+                notify_slack(f"[市場] 市場が{status_market}中")
                 logging.info("[市場] 市場が閉場中")
                 sstop = 1
             await asyncio.sleep(interval_sec)
@@ -1050,6 +1051,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             else:
                 shared_state["vstop_active"] = False
         else:
+            now = datetime.now()
+            if now.hour <= 4:
+                high_prices.clear()
+                low_prices.clear()
+                close_prices.clear()
+                price_buffer.clear()
+                shared_state["price_reset_done"] = True 
             if now.hour >= 21:
                 midnight = True
                 m = 0
@@ -1489,9 +1497,10 @@ async def auto_trade():
         )
     try:
         while True:
-            if is_market_open() != "OPEN":
+            status_market = is_market_open()
+            if  status_market != "OPEN":
                 if vstop==0:
-                    notify_slack(f"[市場] 市場がCLOSEかメンテナンス中")
+                    notify_slack(f"[市場] 市場が{status_market}中")
                     vstop = 1
                 continue
             else:
