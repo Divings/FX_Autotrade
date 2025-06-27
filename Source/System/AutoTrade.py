@@ -510,8 +510,17 @@ BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
 out = assets(API_KEY,API_SECRET)
+available_amounts = out['data']['availableAmount']
 available_amount = int(float(out['data']['availableAmount']))
 notify_slack(f"現在の取引余力は{available_amount}円です。")
+
+def last_balance():
+    global available_amounts
+    out = assets(API_KEY,API_SECRET)
+    last = round(float(out['data']['availableAmount']) - float(available_amounts), 2)
+    notify_slack(f"[当日決算損益] 当日決算損益は{last}円です。")
+    available_amounts = out['data']['availableAmount'] # 定数を更新
+    return
 
 import os
 import requests
@@ -977,6 +986,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     timestop = 0
     m = 0
     s = 0
+    last = 0
     n_nonce = 0
     m_note = 0
     nn_nonce = 0
@@ -1021,6 +1031,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         prices = get_price()
         now = datetime.now()
+        if now.hour == 0 and now.minute == 0:
+            if last == 0:
+                last_balance()
+                last = 1
+        elif last == 1:
+            last = 0
+            
         if now.hour < 4:
             high_prices.clear()
             low_prices.clear()
