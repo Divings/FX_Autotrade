@@ -197,6 +197,7 @@ folder_path = os.path.dirname(os.path.abspath(file_path))
 os.chdir(folder_path)
 import tempfile
 temp_dir = tempfile.mkdtemp()
+key_box = tempfile.mkdtemp()
 session = requests.Session() # セッションを生成
 
 TEST = False # デバッグ用フラグ
@@ -1598,6 +1599,7 @@ async def auto_trade():
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
         shutil.rmtree(temp_dir)
+        shutil.rmtree(key_box)
     except Exception as e:
         notify_slack(f"[致命的エラー] auto_trade() にて {type(e).__name__}: {e}")
         logging.exception("auto_tradeで例外が発生しました")
@@ -1625,10 +1627,10 @@ async def auto_trade():
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_quick_profit タスク終了")
 if __name__ == "__main__":
-    public_key_path = os.path.join(temp_dir, "publickey.asc")
+    public_key_path = os.path.join(key_box, "publickey.asc")
     download_public_key(PUBLIC_KEY_URL, public_key_path)
-    import_public_key(temp_dir, public_key_path)
-    verify_signature(temp_dir, SIGNATURE_FILE, UPDATE_FILE)
+    import_public_key(key_box, public_key_path)
+    verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
     try:
         asyncio.run(auto_trade())
     except SystemExit as e:
