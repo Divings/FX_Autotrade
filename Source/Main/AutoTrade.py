@@ -37,6 +37,7 @@ from Price import extract_price_from_response
 from logs import write_log
 from Assets import assets
 
+# ミッドナイトモード(Trueで有効化)
 night = True
 
 import numpy as np
@@ -322,13 +323,19 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             entry = float(pos["price"])
             size = int(pos["size"])
             side = pos.get("side", "BUY").upper()
-
+            MAX_HOLD = 300
+            EXTENDABLE_LOSS = -10  # 許容する微損（円）
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
-            if elapsed > 300:
-                notify_slack(f"注意! 保有時間が長すぎます\n 強制決済を発動します {profit}")
-                rside=reverse_side(side) 
-                close_order(pid,size,rside)
-                record_result(profit, shared_state)
+
+            if elapsed > MAX_HOLD:
+                if profit > EXTENDABLE_LOSS and shared_state.get("trend") == side:
+                    logging.info("[延長] 保有時間超過だがトレンド継続中のため保持")
+                    return  # 決済せず延長
+                else:
+                    notify_slack(f"注意! 保有時間が長すぎます\n 強制決済を発動します {profit}")
+                    rside = reverse_side(side)
+                    close_order(pid, size, rside)
+                    record_result(profit, shared_state)
                 
             # 通知条件：利益または損失が±10円以上、かつ通知内容が前回と違うとき
             if abs(profit) > 10:
@@ -936,7 +943,7 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
     if a == 2:
         logging.info(f"[結果] {trend} すでにポジションあり")
     elif a == 1:
-        logging.info(f"[結果] {trend}  取引　成功")
+        logging.info(f"[結果] {trend}  取引 成功")
         shared_state["last_trend"] = trend
     else:
         logging.error(f"[結果] {trend} 失敗")
@@ -1052,7 +1059,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             if m == 0 and midnight==False:
                 notify_slack(f"[INFO]ミッドナイトモードが有効です。\n 夜間取引を行います、市場の状況により大きな損失が発生する場合があります。")
                 m = 1
-        
 
         from datetime import datetime, timezone
 
@@ -1328,7 +1334,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         notify_slack(f"[スキップ] {reason}")
                         await asyncio.sleep(interval_sec)
                         continue
-
+                    
                     pid = positions["positionId"]
                     size_str = int(positions["size"])
                     side = positions.get("side", "BUY").upper()
