@@ -826,6 +826,7 @@ def open_order(side="BUY"):
 rootOrderIds = None
 # === ポジション決済 ===
 def close_order(position_id, size, side):
+    global rootOrderIds
     path = "/v1/closeOrder"
     method = "POST"
     timestamp = str(int(time.time() * 1000))  # より精度の高いミリ秒
@@ -867,6 +868,7 @@ def close_order(position_id, size, side):
             fee_test(side)
             if rootOrderIds != None:
                 logging.info(f"ID {rootOrderIds}を決済")
+            rootOrderIds = None
             shared_state["oders_error"]=False
         else:
             notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
