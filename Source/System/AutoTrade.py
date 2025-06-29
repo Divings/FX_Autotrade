@@ -92,7 +92,7 @@ def download_two_files(base_url, download_dir):
         with open(download_path, 'wb') as f:
             shutil.copyfileobj(response.raw, f)
         
-        print(f"Downloaded {filename} to {download_path}")
+        # print(f"Downloaded {filename} to {download_path}")
         
 import os
 import shutil
@@ -546,18 +546,6 @@ def download_public_key(url, save_path):
         notify_slack(f"公開鍵ダウンロード失敗: {str(e)}")
         sys.exit(1)
 
-def verify_signature(gpg_home, signature_file, update_file):
-    """署名検証"""
-    result = subprocess.run(
-        ['gpg', '--homedir', gpg_home, '--verify', signature_file, update_file],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    )
-    if result.returncode != 0:
-        notify_slack("署名検証失敗！起動中止")
-        print(result.stdout)
-        print(result.stderr)
-        subprocess.run("systemctl stop fx-autotrade.service")
-
 def import_public_key(gpg_home, key_path):
     """公開鍵をGPGにインポート"""
     try:
@@ -578,7 +566,7 @@ def verify_signature(gpg_home, signature_file, update_file):
         print(result.stdout)
         print(result.stderr)
         sys.exit(1)
-    print("署名検証成功")
+    notify_slack("[INFO] 署名検証成功")
 
 def notify_asset():
     out=assets(API_KEY,API_SECRET)
