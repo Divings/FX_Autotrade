@@ -1071,6 +1071,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             now = datetime.now()
             if now.hour <= 4:
+                # 誤差吸収のため値を初期化
                 high_prices.clear()
                 low_prices.clear()
                 close_prices.clear()
