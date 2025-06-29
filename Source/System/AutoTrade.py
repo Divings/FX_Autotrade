@@ -880,8 +880,10 @@ def close_order(position_id, size, side):
     except Exception as e:
         notify_slack(f"[決済] 失敗: {e}")
         return None
-
+    
+rootOrderIds = None
 def first_order(trend,shared_state=None):
+    global rootOrderIds
     positions = get_positions()
     prices = get_price()
     if prices is None:
@@ -899,7 +901,8 @@ def first_order(trend,shared_state=None):
         else:
             notify_slack(f"[建玉] なし → 新規{trend}")
             try:
-                open_order(trend)
+                data = open_order(trend)
+                rootOrderIds = data["data"][0]["rootOrderId"]
                 shared_state["entry_time"] = time.time()
                 write_log(trend, ask)
                 return 1
@@ -908,6 +911,21 @@ def first_order(trend,shared_state=None):
                 return 0
     else:
         return 2
+
+def failSafe():
+    """もし終了前に建玉があった時用"""
+    positions = get_positions()
+    if positions:
+        for pos in positions:
+            entry = float(pos["price"])
+            pid = pos["positionId"]
+            size_str = int(pos["size"])
+            side = pos.get("side", "BUY").upper()
+            close_side = "SELL" if side == "BUY" else "BUY"
+            close_order(pid,size_str,close_side)
+    else:
+        print("強制決済建玉なし")
+        return 0
     
 def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
     """
@@ -1604,6 +1622,10 @@ async def auto_trade():
             await asyncio.sleep(CHECK_INTERVAL)
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
+        try:
+            failSafe()
+        except:
+            pass
         shutil.rmtree(temp_dir)
         shutil.rmtree(key_box)
     except Exception as e:
