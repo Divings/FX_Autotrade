@@ -2,7 +2,8 @@ import unittest
 from unittest.mock import patch, MagicMock
 import AutoTrade
 import threading
-
+from dotenv import load_dotenv
+load_dotenv()
 class TestAutoTrade(unittest.IsolatedAsyncioTestCase):
 
     @patch('AutoTrade.get_price')
