@@ -21,6 +21,7 @@ def load_config():
 
 debug=load_config()
 # 設定をDBから読み込む
+
 config1 = load_settings_from_db()
 SLACK_WEBHOOK_URL = config1["SLACK_WEBHOOK_URL"]
 
