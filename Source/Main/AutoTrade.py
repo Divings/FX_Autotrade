@@ -25,6 +25,7 @@ from conf_load import load_settings_from_db
 from datetime import datetime, timedelta
 from logging.handlers import TimedRotatingFileHandler
 from socket_server import start_socket_server
+from decimal import Decimal, ROUND_HALF_UP
 from state_utils import (
     save_state,
     load_state,
@@ -441,8 +442,19 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             size_str = int(pos["size"])
             side = pos.get("side", "BUY").upper()
             close_side = "SELL" if side == "BUY" else "BUY"
+            
+            ask = Decimal(str(ask))
+            entry = Decimal(str(entry))
+            bid = Decimal(str(bid))
+            LOT_SIZE = Decimal(str(LOT_SIZE))
 
-            profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
+            # 利益計算
+            raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
+            profit = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+
+            # profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             # スリッページバッファ込みで早めに判断
             bid = prices["bid"]
@@ -1432,7 +1444,15 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             side = pos.get("side", "BUY").upper()
             close_side = "SELL" if side == "BUY" else "BUY"
 
-            profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
+            ask = Decimal(str(ask))
+            entry = Decimal(str(entry))
+            bid = Decimal(str(bid))
+            LOT_SIZE = Decimal(str(LOT_SIZE))
+
+            # 利益計算
+            raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
+            profit = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            # profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             entry_time = shared_state.get("entry_time")
             if entry_time is None:
@@ -1444,7 +1464,6 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             long_term_target = 30 + PROFIT_BUFFER
             bid = prices["bid"]
             ask = prices["ask"]
-            #mid = (ask + bid) / 2
 
             spread = ask - bid
             
@@ -1531,9 +1550,7 @@ async def auto_trade():
                     shared_state["last_spread"] = spread
             else:
                 shared_state["last_spread"] = None  # 通常状態に戻したい場合
-
-            trend = shared_state.get("trend")
-            
+           
             if positions:
                 for pos in positions:
                     entry = float(pos["price"])
