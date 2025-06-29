@@ -823,6 +823,7 @@ def open_order(side="BUY"):
         notify_slack(f"[注文] 新規建て失敗: {e}")
         return None
 
+rootOrderIds = None
 # === ポジション決済 ===
 def close_order(position_id, size, side):
     path = "/v1/closeOrder"
@@ -864,6 +865,8 @@ def close_order(position_id, size, side):
             # price = data["data"].get("price", "取得不可")
             notify_slack(f"[決済] 成功: {side}")
             fee_test(side)
+            if rootOrderIds != None:
+                logging.info(f"ID {rootOrderIds}を決済")
             shared_state["oders_error"]=False
         else:
             notify_slack(f"[決済] 応答異常: {res.status_code} {data}")
@@ -880,10 +883,8 @@ def close_order(position_id, size, side):
     except Exception as e:
         notify_slack(f"[決済] 失敗: {e}")
         return None
-    
-rootOrderIds = None
+
 def first_order(trend,shared_state=None):
-    global rootOrderIds
     positions = get_positions()
     prices = get_price()
     if prices is None:
@@ -902,7 +903,12 @@ def first_order(trend,shared_state=None):
             notify_slack(f"[建玉] なし → 新規{trend}")
             try:
                 data = open_order(trend)
-                rootOrderIds = data["data"][0]["rootOrderId"]
+                if data and "data" in data and "rootOrderId" in data["data"]:
+                    rootOrderIds = data["data"]["rootOrderId"]
+                    logging.info(f"ID {rootOrderIds}を注文")
+                else:
+                    rootOrderIds = None
+                    # notify_slack("[エラー] 注文のrootOrderIdが取得できませんでした")
                 shared_state["entry_time"] = time.time()
                 write_log(trend, ask)
                 return 1
