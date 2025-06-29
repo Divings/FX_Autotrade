@@ -108,6 +108,44 @@ from Crypto.Protocol.KDF import PBKDF2
 
 BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
 
+def write_info(id,temp_dir):
+    save_dir = temp_dir + "/log/" + str(id) + "_order_info.json"
+    endPoint  = 'https://forex-api.coin.z.com/private'
+    path      = '/v1/orders'
+    method    = 'GET'
+    timestamp = str(int(time.time() * 1000))  # ミリ秒タイムスタンプ
+
+    text = timestamp + method + path
+    sign = hmac.new(
+        API_SECRET.encode('ascii'),
+        text.encode('ascii'),
+        hashlib.sha256
+    ).hexdigest()
+
+    parameters = { "rootOrderId": id }
+
+    headers = {
+        "API-KEY": API_KEY,
+        "API-TIMESTAMP": timestamp,
+        "API-SIGN": sign
+    }
+
+    res = requests.get(endPoint + path, headers=headers, params=parameters)
+
+    try:
+        response_data = res.json()
+        formatted_json = json.dumps(response_data, indent=2)
+
+        # ファイルに保存
+        with open("order_info.json", "w", encoding="utf-8") as f:
+            f.write(formatted_json)
+
+        # print("[保存完了] order_info.json に書き込みました")
+
+    except json.decoder.JSONDecodeError:
+        print("[エラー] サーバーからの応答がJSON形式ではありません")
+        # print(res.text)
+
 # ダウンロード関数はそのまま
 def download_two_files(base_url, download_dir):
     filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
@@ -196,8 +234,11 @@ args=sys.argv
 file_path = sys.argv[0]  # スクリプトファイルのパス
 folder_path = os.path.dirname(os.path.abspath(file_path))
 os.chdir(folder_path)
+
 import tempfile
+
 temp_dir = tempfile.mkdtemp()
+os.makedirs(temp_dir + "/" + "log", exist_ok=True)
 key_box = tempfile.mkdtemp()
 session = requests.Session() # セッションを生成
 
@@ -910,6 +951,7 @@ def first_order(trend,shared_state=None):
                     rootOrderIds = data["data"][0].get("rootOrderId")
                     if rootOrderIds != None:
                         logging.info(f"ID {rootOrderIds}を注文")
+                        write_info(rootOrderIds,temp_dir)
                 else:
                     rootOrderIds = None
                     # notify_slack("[エラー] 注文のrootOrderIdが取得できませんでした")
