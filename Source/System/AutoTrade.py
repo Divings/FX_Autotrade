@@ -885,6 +885,7 @@ def close_order(position_id, size, side):
         return None
 
 def first_order(trend,shared_state=None):
+    global rootOrderIds
     positions = get_positions()
     prices = get_price()
     if prices is None:
@@ -904,8 +905,9 @@ def first_order(trend,shared_state=None):
             try:
                 data = open_order(trend)
                 if data and "data" in data and "rootOrderId" in data["data"]:
-                    rootOrderIds = data["data"]["rootOrderId"]
-                    logging.info(f"ID {rootOrderIds}を注文")
+                    rootOrderIds = data["data"][0].get("rootOrderId")
+                    if rootOrderIds != None:
+                        logging.info(f"ID {rootOrderIds}を注文")
                 else:
                     rootOrderIds = None
                     # notify_slack("[エラー] 注文のrootOrderIdが取得できませんでした")
