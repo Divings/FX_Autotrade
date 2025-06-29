@@ -1,20 +1,22 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import AutoTrade
+import threading
 
-class TestAutoTrade(unittest.TestCase):
+class TestAutoTrade(unittest.IsolatedAsyncioTestCase):
 
     @patch('AutoTrade.get_price')
     @patch('AutoTrade.get_positions')
     @patch('AutoTrade.notify_slack')
     def test_monitor_trend_no_data(self, mock_notify, mock_positions, mock_price):
+        stop_event = threading.Event()
         # RSIやADXの蓄積が不十分なケースを再現
         mock_price.return_value = {'ask': 160.01, 'bid': 160.00}
         AutoTrade.shared_state["rsi_list"] = []
         AutoTrade.shared_state["adx_list"] = []
         AutoTrade.shared_state["trend"] = None
 
-        AutoTrade.monitor_trend()
+        AutoTrade.monitor_trend(stop_event)
 
         self.assertEqual(AutoTrade.shared_state["trend"], None)
         mock_notify.assert_not_called()
