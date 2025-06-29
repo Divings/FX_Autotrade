@@ -8,12 +8,15 @@ from conf_load import load_settings_from_db
 import configparser
 
 def load_config():
-    # ConfigParser オブジェクトを作成
-    config = configparser.ConfigParser()
+    try:
+        # ConfigParser オブジェクトを作成
+        config = configparser.ConfigParser()
 
-    # config.ini を読み込む
-    config.read('config.ini')
-    debug = config.getboolean('settings', 'debug')
+        # config.ini を読み込む
+        config.read('config.ini')
+        debug = config.getboolean('settings', 'debug')
+    except configparser.NoSectionError:
+        debug = False
     return debug
 
 debug=load_config()
