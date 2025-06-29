@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 # .env読み込み
 load_dotenv()
 
+
 def load_settings_from_db():
     """MySQLからAPIキーなどの設定を読み込む"""
     try:
