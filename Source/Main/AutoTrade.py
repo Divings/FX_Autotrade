@@ -1457,12 +1457,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         await asyncio.sleep(interval_sec)
                         continue
                     
-                    pid = positions["positionId"]
-                    size_str = int(positions["size"])
-                    side = positions.get("side", "BUY").upper()
-                    close_side = "SELL" if side == "BUY" else "BUY"
-                    close_order(pid, size_str, close_side)
-                    write_log(close_side, bid)
+                pid = positions["positionId"]
+                size_str = int(positions["size"])
+                side = positions.get("side", "BUY").upper()
+                close_side = "SELL" if side == "BUY" else "BUY"
+                close_order(pid, size_str, close_side)
+                write_log(close_side, bid)
             else:
                     shared_state["trend"] = None
 
