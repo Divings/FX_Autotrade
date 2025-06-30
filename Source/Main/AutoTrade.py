@@ -643,7 +643,7 @@ def notify_asset():
 public_key_path = os.path.join(key_box, "publickey.asc")
 download_public_key(PUBLIC_KEY_URL, public_key_path)
 import_public_key(key_box, public_key_path)
-verify_signature(key_box, "EncryptorSecureDEC.py.sig", "EncryptorSecureDEC.py")
+verify_signature(key_box, "EncryptSecureDEC.py.sig", "EncryptSecureDEC.py")
 
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
