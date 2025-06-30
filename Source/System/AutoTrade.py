@@ -109,12 +109,13 @@ from Crypto.Protocol.KDF import PBKDF2
 BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
 
 def write_README(temp_dir):
-    save_dir = temp_dir + "/log/" + str(id) + "README.json"
+    save_dir = temp_dir + "/log/README.txt"
     # ファイルに保存
     with open(save_dir, "w", encoding="utf-8") as f:
         f.write("このディレクトリは各種ログが記録されます。")
         f.write("\n")
         f.write("システム再起動の原因となるため、手動取引を行う場合あらかじめシステムを停止してください。\nシステムの再起動により発生したすべての損害を開発者は補償しません")
+        f.write()
 
 def write_info(id,temp_dir):
     save_dir = temp_dir + "/log/" + str(id) + "_order_info.json"
