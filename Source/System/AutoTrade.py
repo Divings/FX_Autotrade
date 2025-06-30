@@ -639,6 +639,11 @@ def notify_asset():
     notify_slack(f"現在の取引余力は{available_amount}円です。\n 現在の現金残高は{balance}円です。")
     return 0
 
+# EncryptSecureDECの署名検証
+public_key_path = os.path.join(key_box, "publickey.asc")
+import_public_key(key_box, public_key_path)
+verify_signature(key_box, "EncryptorSecureDEC.py.sig", "EncryptorSecureDEC.py")
+
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
 
@@ -1720,9 +1725,9 @@ async def auto_trade():
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_quick_profit タスク終了")
 if __name__ == "__main__":
-    public_key_path = os.path.join(key_box, "publickey.asc")
+    
     download_public_key(PUBLIC_KEY_URL, public_key_path)
-    import_public_key(key_box, public_key_path)
+    # import_public_key(key_box, public_key_path)
     verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
     try:
         asyncio.run(auto_trade())
