@@ -1446,12 +1446,23 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             elif trend == "SELL" and (macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
                 await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str)
             elif positions and trend == "SELL" and (macd_bullish or macd_cross_up):
-                notify_slack(f"[トレンド] トレンド反転 即時損切り")                    
-                pid = positions["positionId"]
-                size_str = int(positions["size"])
-                side = positions.get("side", "BUY").upper()
-                close_side = "SELL" if side == "BUY" else "BUY"
-                close_order(pid, size_str, close_side)
+                notify_slack(f"[トレンド] トレンド反転 即時損切り")
+                positions = get_positions()
+                prices = get_price()
+                if prices is None:
+                    await asyncio.sleep(interval_sec)
+                    continue
+
+                ask = prices["ask"]
+                bid = prices["bid"]
+
+                for pos in positions:
+                    entry = float(pos["price"])
+                    pid = pos["positionId"]
+                    size_str = int(pos["size"])
+                    side = pos.get("side", "BUY").upper()
+                    close_side = "SELL" if side == "BUY" else "BUY"
+                    close_order(pid, size_str, close_side)
                 write_log(close_side, bid)
             else:
                     shared_state["trend"] = None
