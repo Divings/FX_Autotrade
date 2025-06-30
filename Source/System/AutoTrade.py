@@ -108,6 +108,13 @@ from Crypto.Protocol.KDF import PBKDF2
 
 BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
 
+def write_README(temp_dir):
+    save_dir = temp_dir + "/log/" + str(id) + "README.json"
+    # ファイルに保存
+    with open(save_dir, "a", encoding="utf-8") as f:
+        f.write("このディレクトリは各種ログが記録されます。")
+        f.write("\n")
+
 def write_info(id,temp_dir):
     save_dir = temp_dir + "/log/" + str(id) + "_order_info.json"
     endPoint  = 'https://forex-api.coin.z.com/private'
@@ -488,7 +495,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             ask = Decimal(str(ask))
             entry = Decimal(str(entry))
             bid = Decimal(str(bid))
-            LOT_SIZE = Decimal(str(LOT_SIZE))
+            # LOT_SIZE = Decimal(str(LOT_SIZE))
 
             # 利益計算
             raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
@@ -1522,7 +1529,6 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             ask = Decimal(str(ask))
             entry = Decimal(str(entry))
             bid = Decimal(str(bid))
-            LOT_SIZE = Decimal(str(LOT_SIZE))
 
             # 利益計算
             raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
