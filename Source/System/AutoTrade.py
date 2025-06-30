@@ -108,14 +108,16 @@ from Crypto.Protocol.KDF import PBKDF2
 
 BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
 
-def write_README(temp_dir):
-    save_dir = temp_dir + "/log/README.txt"
+def write_README(temp_dir,path,message):
+    if path!=None:
+        save_dir = temp_dir + path +"README.txt"
+    else:
+        save_dir = temp_dir + "/README.txt"
     # ファイルに保存
     with open(save_dir, "w", encoding="utf-8") as f:
-        f.write("このディレクトリは各種ログが記録されます。")
-        f.write("\n")
-        f.write("システム再起動の原因となるため、手動取引を行う場合あらかじめシステムを停止してください。\nシステムの再起動により発生したすべての損害を開発者は補償しません")
-        f.write("\n")
+        f.write(message)
+
+txt_message="このディレクトリは各種ログが記録されます。\nシステム再起動の原因となるため、手動取引を行う場合あらかじめシステムを停止してください。\nシステムの再起動により発生したすべての損害を開発者は補償しません\n"
 
 def write_info(id,temp_dir):
     save_dir = temp_dir + "/log/" + str(id) + "_order_info.json"
@@ -251,7 +253,10 @@ temp_dir = tempfile.mkdtemp()
 os.makedirs(temp_dir + "/" + "log", exist_ok=True)
 key_box = tempfile.mkdtemp()
 session = requests.Session() # セッションを生成
-write_README(temp_dir)
+
+txt_message="このシステムはInnovation Craft Inc.の所有物です。\n正規の手段、手順以外で得たコードを使用した場合、法的措置の対象となる場合があります。\n\n"
+write_README(temp_dir,"/log/",txt_message)
+write_README(temp_dir,None,txt_message)
 TEST = False # デバッグ用フラグ
 spread_history = deque(maxlen=5)
 
