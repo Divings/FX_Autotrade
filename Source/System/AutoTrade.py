@@ -137,8 +137,9 @@ def write_info(id,temp_dir):
         formatted_json = json.dumps(response_data, indent=2)
 
         # ファイルに保存
-        with open("order_info.json", "w", encoding="utf-8") as f:
+        with open(save_dir, "a", encoding="utf-8") as f:
             f.write(formatted_json)
+            f.write("\n")
 
         # print("[保存完了] order_info.json に書き込みました")
 
@@ -909,6 +910,7 @@ def close_order(position_id, size, side):
             fee_test(side)
             if rootOrderIds != None:
                 logging.info(f"ID {rootOrderIds}を決済")
+                write_info(rootOrderIds,temp_dir)
             rootOrderIds = None
             shared_state["oders_error"]=False
         else:
@@ -967,6 +969,7 @@ def first_order(trend,shared_state=None):
 def failSafe():
     """もし終了前に建玉があった時用"""
     positions = get_positions()
+    prices=get_price()
     if positions:
         for pos in positions:
             entry = float(pos["price"])
@@ -975,6 +978,8 @@ def failSafe():
             side = pos.get("side", "BUY").upper()
             close_side = "SELL" if side == "BUY" else "BUY"
             close_order(pid,size_str,close_side)
+            bid = prices["bid"]
+            write_log("LOSS_CUT", bid)
     else:
         print("強制決済建玉なし")
         return 0
