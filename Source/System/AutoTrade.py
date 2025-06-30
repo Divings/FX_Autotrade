@@ -111,9 +111,10 @@ BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
 def write_README(temp_dir):
     save_dir = temp_dir + "/log/" + str(id) + "README.json"
     # ファイルに保存
-    with open(save_dir, "a", encoding="utf-8") as f:
+    with open(save_dir, "w", encoding="utf-8") as f:
         f.write("このディレクトリは各種ログが記録されます。")
         f.write("\n")
+        f.write("システム再起動の原因となるため、手動取引を行う場合あらかじめシステムを停止してください。\nシステムの再起動により発生したすべての損害を開発者は補償しません")
 
 def write_info(id,temp_dir):
     save_dir = temp_dir + "/log/" + str(id) + "_order_info.json"
@@ -249,7 +250,7 @@ temp_dir = tempfile.mkdtemp()
 os.makedirs(temp_dir + "/" + "log", exist_ok=True)
 key_box = tempfile.mkdtemp()
 session = requests.Session() # セッションを生成
-
+write_README(temp_dir)
 TEST = False # デバッグ用フラグ
 spread_history = deque(maxlen=5)
 
