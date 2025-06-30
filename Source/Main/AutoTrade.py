@@ -641,6 +641,7 @@ def notify_asset():
 
 # EncryptSecureDECの署名検証
 public_key_path = os.path.join(key_box, "publickey.asc")
+download_public_key(PUBLIC_KEY_URL, public_key_path)
 import_public_key(key_box, public_key_path)
 verify_signature(key_box, "EncryptorSecureDEC.py.sig", "EncryptorSecureDEC.py")
 
@@ -1726,7 +1727,6 @@ async def auto_trade():
             notify_slack("[INFO] monitor_quick_profit タスク終了")
 if __name__ == "__main__":
     
-    download_public_key(PUBLIC_KEY_URL, public_key_path)
     # import_public_key(key_box, public_key_path)
     verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
     try:
