@@ -625,7 +625,7 @@ def verify_signature(gpg_home, signature_file, update_file):
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
     if result.returncode != 0:
-        notify_slack("署名検証失敗！起動中止")
+        notify_slack(f"署名検証失敗！起動中止:{update_file}")
         print(result.stdout)
         print(result.stderr)
         sys.exit(1)
