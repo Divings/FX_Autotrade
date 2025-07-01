@@ -558,9 +558,12 @@ MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
-    if len(prices) < 5:
+    if not isinstance(prices, (list, tuple)) or len(prices) < 2:
         return False
-    return statistics.stdev(prices[-5:]) > threshold
+    try:
+        return statistics.stdev(prices[-5:]) > threshold
+    except statistics.StatisticsError:
+        return False
 
 def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
