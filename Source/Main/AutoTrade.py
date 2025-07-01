@@ -953,6 +953,7 @@ def close_order(position_id, size, side):
         return None
 
 def first_order(trend,shared_state=None):
+    # now = datetime.datetime.now()
     global rootOrderIds
     positions = get_positions()
     prices = get_price()
