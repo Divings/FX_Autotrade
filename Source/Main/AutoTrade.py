@@ -1473,11 +1473,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 elapsed = (now - shared_state["trend_start_time"]).total_seconds() / 60.0
                 if elapsed < TREND_HOLD_MINUTES:
                     trend_active = True
-                    logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
+                    if trend != None:
+                        logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
             stc = dynamic_filter(adx, rsi, bid, ask)
             if stc and trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi_limit and dmi_trend_match:
+                if is_high_volatility(close_prices):
+                    msg = f"[スキップ] {trend} ボラティリティ高のためエントリースキップ"
+                    logging.info(msg)
+                    notify_slack(msg)
+                    continue  # エントリーしない
                 await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str)
             elif stc and trend == "SELL" and (macd_cross_down) and sma_cross_down and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
+                if is_high_volatility(close_prices):
+                    msg = f"[スキップ] {trend} ボラティリティ高のためエントリースキップ"
+                    logging.info(msg)
+                    notify_slack(msg)
+                    continue  # エントリーしない
                 await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str)
             elif positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
