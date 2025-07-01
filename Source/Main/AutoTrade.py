@@ -1076,15 +1076,15 @@ def dynamic_filter(adx, rsi, bid, ask):
 
     # 各条件のチェック
     if spread > spread_threshold:
-        notify_slack(f"[スキップ] スプレッド過大: {spread:.3f} > {spread_threshold}")
+        logging.info(f"[スキップ] スプレッド過大: {spread:.3f} > {spread_threshold}")
         return False
 
     if adx < adx_threshold:
-        notify_slack(f"[スキップ] ADX不足: {adx:.1f} < {adx_threshold}")
+        logging.info(f"[スキップ] ADX不足: {adx:.1f} < {adx_threshold}")
         return False
 
     if rsi <= 20 or rsi >= 80:
-        notify_slack(f"[スキップ] RSI過熱/過冷: {rsi:.1f}")
+        logging.info(f"[スキップ] RSI過熱/過冷: {rsi:.1f}")
         return False
 
     return True
