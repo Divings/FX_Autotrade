@@ -1054,6 +1054,41 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
         logging.error(f"[結果] {trend} 失敗")
     logging.info(f"[エントリー判定] {trend} トレンド確定")
 
+from datetime import datetime
+
+def dynamic_filter(adx, rsi, bid, ask):
+    now = datetime.now()
+    hour = now.hour
+
+    # スプレッドの計算
+    spread = ask - bid
+
+    # 時間帯によってしきい値を変更
+    if 9 <= hour < 15:
+        adx_threshold = 35
+        spread_threshold = 0.25
+    elif 15 <= hour < 22:
+        adx_threshold = 25
+        spread_threshold = 0.3
+    else:
+        adx_threshold = 20
+        spread_threshold = 0.35
+
+    # 各条件のチェック
+    if spread > spread_threshold:
+        print(f"[スキップ] スプレッド過大: {spread:.3f} > {spread_threshold}")
+        return False
+
+    if adx < adx_threshold:
+        print(f"[スキップ] ADX不足: {adx:.1f} < {adx_threshold}")
+        return False
+
+    if rsi <= 20 or rsi >= 80:
+        print(f"[スキップ] RSI過熱/過冷: {rsi:.1f}")
+        return False
+
+    return True
+
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     import statistics
@@ -1310,6 +1345,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
+
         rsi_limit = (trend == "BUY" and rsi < 70) or (trend == "SELL" and rsi > 30)
         logging.info(f"[MACD] クロス判定: UP={macd_cross_up}, DOWN={macd_cross_down}")
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
@@ -1440,12 +1476,31 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if elapsed < TREND_HOLD_MINUTES:
                     trend_active = True
                     logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
-            
-            if trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match:
+            stc = dynamic_filter(adx, rsi, bid, ask)
+            if stc and trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi < 70 and adx >= 20 and rsi_limit and dmi_trend_match:
                 await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str)
-            elif trend == "SELL" and (macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
+            elif stc and trend == "SELL" and (macd_cross_down) and sma_cross_down and adx >= 20 and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
                 await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str)
-            elif positions and trend == "SELL" and (macd_bullish or macd_cross_up):
+            elif positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
+                notify_slack(f"[トレンド] トレンド反転 即時損切り")
+                positions = get_positions()
+                prices = get_price()
+                if prices is None:
+                    await asyncio.sleep(interval_sec)
+                    continue
+
+                ask = prices["ask"]
+                bid = prices["bid"]
+
+                for pos in positions:
+                    entry = float(pos["price"])
+                    pid = pos["positionId"]
+                    size_str = int(pos["size"])
+                    side = pos.get("side", "BUY").upper()
+                    close_side = "SELL" if side == "BUY" else "BUY"
+                    close_order(pid, size_str, close_side)
+                write_log(close_side, bid)
+            elif positions and trend == "BUY" and macd_cross_down:
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
                 positions = get_positions()
                 prices = get_price()
