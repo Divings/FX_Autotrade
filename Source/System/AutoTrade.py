@@ -39,7 +39,7 @@ from logs import write_log
 from Assets import assets
 
 # ミッドナイトモード(Trueで有効化)
-night = True
+night = False
 
 import numpy as np
 
