@@ -1240,6 +1240,24 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         ask = prices["ask"]
         mid = (ask + bid) / 2
 
+        price_buffer.append(bid)
+        high_prices.append(ask)
+        low_prices.append(bid)
+        close_prices.append(mid)
+        
+        if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
+            logging.info(f"[待機中] ADX計算用に蓄積中: {len(close_prices)}/28")
+            await asyncio.sleep(interval_sec)
+            continue
+        
+        if len(price_buffer) < long_period:
+            if not shared_state.get("trend_init_notice"):
+                notify_slack("[MAトレンド判定] データ蓄積中 → 判定保留中")
+                logging.info("[初期化] データ蓄積中")
+                shared_state["trend_init_notice"] = True
+            await asyncio.sleep(interval_sec)
+            continue
+
         spread = ask - bid
         if spread > MAX_SPREAD:
             shared_state["trend"] = None
@@ -1265,24 +1283,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 continue
             else:
                 nstop = 0
-
-        price_buffer.append(bid)
-        high_prices.append(ask)
-        low_prices.append(bid)
-        close_prices.append(mid)
-        
-        if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
-            logging.info(f"[待機中] ADX計算用に蓄積中: {len(close_prices)}/28")
-            await asyncio.sleep(interval_sec)
-            continue
-        
-        if len(price_buffer) < long_period:
-            if not shared_state.get("trend_init_notice"):
-                notify_slack("[MAトレンド判定] データ蓄積中 → 判定保留中")
-                logging.info("[初期化] データ蓄積中")
-                shared_state["trend_init_notice"] = True
-            await asyncio.sleep(interval_sec)
-            continue
 
         short_ma = sum(list(price_buffer)[-short_period:]) / short_period
         long_ma = sum(list(price_buffer)[-long_period:]) / long_period
