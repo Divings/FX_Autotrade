@@ -1054,10 +1054,8 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
         logging.error(f"[結果] {trend} 失敗")
     logging.info(f"[エントリー判定] {trend} トレンド確定")
 
-from datetime import datetime
-
 def dynamic_filter(adx, rsi, bid, ask):
-    now = datetime.now()
+    now = datetime.datetime.now()
     hour = now.hour
 
     # スプレッドの計算
