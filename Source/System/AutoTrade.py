@@ -1486,18 +1486,18 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if prices is None:
                     await asyncio.sleep(interval_sec)
                     continue
+                if positions:
+                    ask = prices["ask"]
+                    bid = prices["bid"]
 
-                ask = prices["ask"]
-                bid = prices["bid"]
-
-                for pos in positions:
-                    entry = float(pos["price"])
-                    pid = pos["positionId"]
-                    size_str = int(pos["size"])
-                    side = pos.get("side", "BUY").upper()
-                    close_side = "SELL" if side == "BUY" else "BUY"
+                    for pos in positions:
+                        entry = float(pos["price"])
+                        pid = pos["positionId"]
+                        size_str = int(pos["size"])
+                        side = pos.get("side", "BUY").upper()
+                        close_side = "SELL" if side == "BUY" else "BUY"
                     close_order(pid, size_str, close_side)
-                write_log(close_side, bid)
+                    write_log(close_side, bid)
             elif positions and trend == "BUY" and macd_cross_down:
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
                 positions = get_positions()
@@ -1505,18 +1505,18 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if prices is None:
                     await asyncio.sleep(interval_sec)
                     continue
+                if positions:
+                    ask = prices["ask"]
+                    bid = prices["bid"]
 
-                ask = prices["ask"]
-                bid = prices["bid"]
-
-                for pos in positions:
-                    entry = float(pos["price"])
-                    pid = pos["positionId"]
-                    size_str = int(pos["size"])
-                    side = pos.get("side", "BUY").upper()
-                    close_side = "SELL" if side == "BUY" else "BUY"
+                    for pos in positions:
+                        entry = float(pos["price"])
+                        pid = pos["positionId"]
+                        size_str = int(pos["size"])
+                        side = pos.get("side", "BUY").upper()
+                        close_side = "SELL" if side == "BUY" else "BUY"
                     close_order(pid, size_str, close_side)
-                write_log(close_side, bid)
+                    write_log(close_side, bid)
             else:
                     shared_state["trend"] = None
 
