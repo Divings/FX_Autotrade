@@ -41,6 +41,8 @@ from Assets import assets
 # ミッドナイトモード(Trueで有効化)
 night = False
 
+SYS_VER = "3.5.6"
+
 import numpy as np
 
 def calculate_range(candles, period=10):
@@ -1185,6 +1187,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             if s == 1 and now.hour !=6:
                 s = 0
         if night != True:
+            midnight = False
             if now.hour >= TIME_STOP or now.hour < 5:
                 midnight = False
                 if not shared_state.get("vstop_active", False):                   
