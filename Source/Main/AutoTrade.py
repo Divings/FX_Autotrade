@@ -81,6 +81,39 @@ import shutil
 import requests
 from EncryptSecureDEC import decrypt_file
 
+
+import statistics
+
+def is_volatile(prices, candles, threshold_stdev=0.05, max_wick_ratio=0.7, highlow_threshold=0.10):
+    """
+    prices: 終値のリスト（最新が最後）
+    candles: ローソク足データのリスト（辞書形式）
+      例: [{'open': x, 'high': x, 'low': x, 'close': x}, ...]
+    """
+    if len(prices) < 5 or len(candles) < 1:
+        return False  # データ不足
+
+    # 1. 標準偏差でボラ判断
+    stdev_value = statistics.stdev(prices[-5:])
+    if stdev_value > threshold_stdev:
+        return True
+
+    # 2. 直近ローソク足でヒゲ比率判定
+    last = candles[-1]
+    body = abs(last['open'] - last['close'])
+    upper_wick = last['high'] - max(last['open'], last['close'])
+    lower_wick = min(last['open'], last['close']) - last['low']
+    wick_ratio = (upper_wick + lower_wick) / (body + 1e-6)  # 0除算防止
+    if wick_ratio > max_wick_ratio:
+        return True
+
+    # 3. High-Lowの幅（pips）
+    highlow_diff = last['high'] - last['low']
+    if highlow_diff > highlow_threshold:
+        return True
+
+    return False  # どの条件にも該当しない → 通常モード
+
 def download_two_files(base_url, download_dir):
     filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
     
@@ -1461,7 +1494,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
             now = datetime.now()
             trend_active = False
-
+            if is_volatile(close_prices, candles):
+                notify_slack("[フィルター] 乱高下中につき判定スキップ")
+                continue  # トレンド判定処理を一時スキップ
             # ここにDMI判定を追加する
             plus_di, minus_di = calculate_dmi(high_prices, low_prices, close_prices)
             current_plus_di = plus_di[-1]
