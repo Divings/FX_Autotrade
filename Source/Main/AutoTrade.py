@@ -625,12 +625,36 @@ available_amounts = out['data']['availableAmount']
 available_amount = int(float(out['data']['availableAmount']))
 notify_slack(f"現在の取引余力は{available_amount}円です。")
 
+if os.path.isfile("pricesData.txt") == False and now.hour>=1:
+    with open("pricesData.txt", "w", encoding="utf-8") as f:
+        f.write(available_amounts)
+else:
+    with open("pricesData.txt", "r", encoding="utf-8") as f:
+        saved_available_amounts = f.read().strip()
+        try:
+            saved_available_amount = float(saved_available_amounts)
+        except ValueError:
+            logging.error("基準初期残高読み込み時にエラー")
+            saved_available_amount = out['data']['availableAmount']
+
 def last_balance():
     global available_amounts
+    if os.path.isfile("pricesData.txt") == True:
+        with open("pricesData.txt", "r", encoding="utf-8") as f:
+            saved_available_amounts = f.read().strip()
+            try:
+                saved_available_amount = float(saved_available_amounts)
+            except ValueError:
+                logging.error("基準初期残高読み込み時にエラー")
+                saved_available_amount = out['data']['availableAmount']
+    else:
+        saved_available_amount = out['data']['availableAmount']
     out = assets(API_KEY,API_SECRET)
-    last = round(float(out['data']['availableAmount']) - float(available_amounts), 2)
+    last = round(float(out['data']['availableAmount']) - float(saved_available_amount), 2)
     notify_slack(f"[当日決算損益] 当日決算損益は{last}円です。")
     available_amounts = out['data']['availableAmount'] # 定数を更新
+    with open("pricesData.txt", "w", encoding="utf-8") as f:
+        f.write(available_amounts)
     return
 
 import os
