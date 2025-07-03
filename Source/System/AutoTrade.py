@@ -87,12 +87,14 @@ import statistics
 def is_volatile(prices, candles, threshold_stdev=0.05, max_wick_ratio=0.7, highlow_threshold=0.10):
     try:
         logging.info(f"[DEBUG] prices: {type(prices)}, value: {prices}")
-        if not isinstance(prices, list) or len(prices) < 5:
-            return False
         if not isinstance(candles, list) or len(candles) < 1:
             return False
 
         # 1. 標準偏差でボラ判断
+        
+        if isinstance(prices, deque):
+            prices = list(prices)
+
         stdev_value = statistics.stdev(prices[-5:])
         if stdev_value > threshold_stdev:
             return True
@@ -597,12 +599,19 @@ MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
-    if not isinstance(prices, (list, tuple)) or len(prices) < 2:
+    # deque, list, tuple のいずれかか確認
+    if not isinstance(prices, (list, tuple, deque)) or len(prices) < 2:
         return False
+
+    # dequeの場合はリストに変換
+    if isinstance(prices, deque):
+        prices = list(prices)
+
     try:
         return statistics.stdev(prices[-5:]) > threshold
     except statistics.StatisticsError:
         return False
+
 import copy
 Buffer = copy.copy(MAX_LOSS)
 def adjust_max_loss(prices,base_loss=50,vol_thresholds=(0.03, 0.05),adjustments=(5, 10),period=5):
