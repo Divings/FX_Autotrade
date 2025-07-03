@@ -83,57 +83,57 @@ from EncryptSecureDEC import decrypt_file
 
 import statistics
 
-def is_volatile(prices, candles,
-                threshold_stdev=0.05,
-                max_wick_ratio=1.0,   # 緩め
-                highlow_threshold=0.15,  # 緩め
-                period=5,
-                trend_multiplier=0.8):  # 方向感に寛容
-    """
-    トレンド重視の乱高下判定
-    """
+def is_volatile(prices, candles, period=5):
     import statistics
     from collections import deque
 
-    if not isinstance(prices, (list, tuple, deque)) or len(prices) < period:
+    if not isinstance(prices, (list, tuple, deque)) or len(prices) < period + 10:
         return False
-    if not isinstance(candles, list) or len(candles) < 1:
+    if not isinstance(candles, list) or len(candles) < period + 10:
         return False
 
     if isinstance(prices, deque):
         prices = list(prices)
 
     try:
-        stdev_value = statistics.stdev(prices[-period:])
+        recent_prices = prices[-period:]
+        stdev_value = statistics.stdev(recent_prices)
+
+        # 過去の中央値と比べてボラが高いか判断
+        historical_stdevs = [statistics.stdev(prices[i - period:i]) for i in range(period, period + 10)]
+        median_stdev = statistics.median(historical_stdevs)
+        dynamic_threshold_stdev = median_stdev * 1.2  # ←過去より20%高ければボラ高
+
     except statistics.StatisticsError:
         return False
 
-    # 方向感
-    trend_direction = prices[-1] - prices[-period]
-    trend_threshold = stdev_value * trend_multiplier
+    # 動的しきい値でチェック
+    if stdev_value > dynamic_threshold_stdev:
+        return True
 
-    if abs(trend_direction) >= trend_threshold:
-        return False  # トレンドなので乱高下ではない
-
-    # ヒゲ
+    # ヒゲ比率チェック（直近のローソク足）
     last = candles[-1]
-    body = abs(last['open'] - last['close'])
-    upper_wick = last['high'] - max(last['open'], last['close'])
-    lower_wick = min(last['open'], last['close']) - last['low']
-    wick_ratio = (upper_wick + lower_wick) / (body + 1e-6)
-    if wick_ratio > max_wick_ratio:
+    body = abs(last["open"] - last["close"])
+    high = last["high"]
+    low = last["low"]
+    wick_upper = high - max(last["open"], last["close"])
+    wick_lower = min(last["open"], last["close"]) - low
+    wick_ratio = (wick_upper + wick_lower) / (body + 1e-5)  # 0除算回避
+
+    avg_candle_size = statistics.mean([c["high"] - c["low"] for c in candles[-10:]])
+    dynamic_wick_ratio_threshold = 2.0 if avg_candle_size < 0.5 else 1.0
+
+    if wick_ratio > dynamic_wick_ratio_threshold:
         return True
 
-    # high-low
-    highlow_diff = last['high'] - last['low']
-    if highlow_diff > highlow_threshold:
+    # 高低差によるチェック
+    highlow_diff = high - low
+    avg_highlow = statistics.mean([c["high"] - c["low"] for c in candles[-10:]])
+    if highlow_diff > avg_highlow * 1.5:
         return True
 
-    # ボラが高く方向感もないなら乱高下
-    if stdev_value > threshold_stdev:
-        return True
+    return False  # 安定
 
-    return False
 
 def download_two_files(base_url, download_dir):
     filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
