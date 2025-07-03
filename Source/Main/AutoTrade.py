@@ -704,6 +704,7 @@ else:
 
 from AddData import insert_data
 def last_balance():
+    SECRET_KEYs = os.getenv("SECRET_PASSWORD").encode()
     global available_amounts
     if os.path.isfile("pricesData.txt") == True:
         with open("pricesData.txt", "r", encoding="utf-8") as f:
@@ -715,14 +716,16 @@ def last_balance():
                 saved_available_amount = out['data']['availableAmount']
     else:
         saved_available_amount = out['data']['availableAmount']
+    
     out = assets(API_KEY,API_SECRET)
     last = round(float(out['data']['availableAmount']) - float(saved_available_amount), 2)
+    sign1 = hmac.new(SECRET_KEYs, str(last).encode(), hashlib.sha256).hexdigest()
     notify_slack(f"[当日決算損益] 当日決算損益は{last}円です。")
     available_amounts = out['data']['availableAmount'] # 定数を更新
     result = insert_data(
         table="Same-day-profit",
         columns=["Profit", "sign"],
-        values=(str(last), "taro.tanaka@example.com")
+        values=(str(last), sign1)
     )
     if result:
         logging.info("データ挿入成功")
