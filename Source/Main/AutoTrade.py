@@ -119,7 +119,6 @@ def is_volatile(prices, candles, threshold_stdev=0.05, max_wick_ratio=0.7, highl
         notify_slack(f"[is_volatile] 例外発生: {e}")
         return False  # エラー時はフィルターOFFにして処理続行
 
-
 def download_two_files(base_url, download_dir):
     filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
     
@@ -614,32 +613,45 @@ def is_high_volatility(prices, threshold=VOL_THRESHOLD):
 
 import copy
 Buffer = copy.copy(MAX_LOSS)
-def adjust_max_loss(prices,base_loss=50,vol_thresholds=(0.03, 0.05),adjustments=(5, 10),period=5):
+_PREV_MAX_LOSS = None
+
+def adjust_max_loss(prices,
+                    base_loss=50,
+                    vol_thresholds=(0.03, 0.05),
+                    adjustments=(5, 10),
+                    period=5):
     """
     ボラティリティに応じて MAX_LOSS を調整してグローバルに設定
-    ログとSlack通知も行う
+    前回と値が変わったときのみログ・Slack通知
     """
-    global MAX_LOSS
-    
+    global MAX_LOSS, _PREV_MAX_LOSS
+
     if len(prices) < period:
         MAX_LOSS = base_loss
-        msg = f"[INFO] データ不足のため MAX_LOSS = {MAX_LOSS}円"
-        logging.info(msg)
-        notify_slack(msg)
+        if MAX_LOSS != _PREV_MAX_LOSS:
+            msg = f"[INFO] データ不足のため MAX_LOSS = {MAX_LOSS}円"
+            logging.info(msg)
+            notify_slack(msg)
+            _PREV_MAX_LOSS = MAX_LOSS
         return
 
     vol = statistics.stdev(list(prices)[-period:])
 
     if vol > vol_thresholds[1]:
-        MAX_LOSS = base_loss + adjustments[1]
+        new_max_loss = base_loss + adjustments[1]
     elif vol > vol_thresholds[0]:
-        MAX_LOSS = base_loss + adjustments[0]
+        new_max_loss = base_loss + adjustments[0]
     else:
-        MAX_LOSS = base_loss
+        new_max_loss = Buffer
 
-    msg = f"[INFO] ボラ={vol:.4f}, MAX_LOSS を更新: {MAX_LOSS}円"
-    logging.info(msg)
-    notify_slack(msg)
+    MAX_LOSS = new_max_loss
+
+    # 値が変わったときだけ通知
+    if MAX_LOSS != _PREV_MAX_LOSS:
+        msg = f"[INFO] ボラ={vol:.4f}, MAX_LOSS を更新: {MAX_LOSS}円"
+        logging.info(msg)
+        notify_slack(msg)
+        _PREV_MAX_LOSS = MAX_LOSS
 
 def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
