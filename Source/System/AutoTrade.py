@@ -603,6 +603,34 @@ def is_high_volatility(prices, threshold=VOL_THRESHOLD):
         return statistics.stdev(prices[-5:]) > threshold
     except statistics.StatisticsError:
         return False
+import copy
+Buffer = copy.copy(MAX_LOSS)
+def adjust_max_loss(prices,base_loss=50,vol_thresholds=(0.03, 0.05),adjustments=(5, 10),period=5):
+    """
+    ボラティリティに応じて MAX_LOSS を調整してグローバルに設定
+    ログとSlack通知も行う
+    """
+    global MAX_LOSS
+
+    if len(prices) < period:
+        MAX_LOSS = base_loss
+        msg = f"[INFO] データ不足のため MAX_LOSS = {MAX_LOSS}円"
+        logging.info(msg)
+        notify_slack(msg)
+        return
+
+    vol = statistics.stdev(prices[-period:])
+
+    if vol > vol_thresholds[1]:
+        MAX_LOSS = base_loss + adjustments[1]
+    elif vol > vol_thresholds[0]:
+        MAX_LOSS = base_loss + adjustments[0]
+    else:
+        MAX_LOSS = base_loss
+
+    msg = f"[INFO] ボラ={vol:.4f}, MAX_LOSS を更新: {MAX_LOSS}円"
+    logging.info(msg)
+    notify_slack(msg)
 
 def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
@@ -1521,6 +1549,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             TREND_HOLD_MINUTES = 15  # 任意の継続時間
 
             now = datetime.now()
+            adjust_max_loss(close_prices,VOL_THRESHOLD)
             trend_active = False
             if is_volatile(close_prices, candles):
                 notify_slack("[フィルター] 乱高下中につき判定スキップ")
