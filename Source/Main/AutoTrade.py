@@ -611,8 +611,7 @@ def adjust_max_loss(prices,base_loss=50,vol_thresholds=(0.03, 0.05),adjustments=
     ログとSlack通知も行う
     """
     global MAX_LOSS
-    if not isinstance(prices, list) or len(prices) < 5:
-        return False
+    
     if len(prices) < period:
         MAX_LOSS = base_loss
         msg = f"[INFO] データ不足のため MAX_LOSS = {MAX_LOSS}円"
@@ -620,7 +619,7 @@ def adjust_max_loss(prices,base_loss=50,vol_thresholds=(0.03, 0.05),adjustments=
         notify_slack(msg)
         return
 
-    vol = statistics.stdev(prices[-period:])
+    vol = statistics.stdev(list(prices)[-period:])
 
     if vol > vol_thresholds[1]:
         MAX_LOSS = base_loss + adjustments[1]
