@@ -702,6 +702,7 @@ else:
             logging.error("基準初期残高読み込み時にエラー")
             saved_available_amount = out['data']['availableAmount']
 
+from AddData import insert_data
 def last_balance():
     global available_amounts
     if os.path.isfile("pricesData.txt") == True:
@@ -718,6 +719,16 @@ def last_balance():
     last = round(float(out['data']['availableAmount']) - float(saved_available_amount), 2)
     notify_slack(f"[当日決算損益] 当日決算損益は{last}円です。")
     available_amounts = out['data']['availableAmount'] # 定数を更新
+    result = insert_data(
+        table="Same-day-profit",
+        columns=["Profit", "sign"],
+        values=(str(last), "taro.tanaka@example.com")
+    )
+    if result:
+        logging.info("データ挿入成功")
+    else:
+        logging.error("データ挿入失敗")
+
     with open("pricesData.txt", "w", encoding="utf-8") as f:
         f.write(available_amounts)
     return
