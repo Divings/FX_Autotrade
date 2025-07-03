@@ -39,7 +39,7 @@ from logs import write_log
 from Assets import assets
 
 # ミッドナイトモード(Trueで有効化)
-night = False
+night = True
 
 SYS_VER = "3.5.6"
 
@@ -80,7 +80,6 @@ import os
 import shutil
 import requests
 from EncryptSecureDEC import decrypt_file
-
 
 import statistics
 
