@@ -1549,7 +1549,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             TREND_HOLD_MINUTES = 15  # 任意の継続時間
 
             now = datetime.now()
-            adjust_max_loss(close_prices,VOL_THRESHOLD)
+            adjust_max_loss(close_prices)
             trend_active = False
             if is_volatile(close_prices, candles):
                 notify_slack("[フィルター] 乱高下中につき判定スキップ")
