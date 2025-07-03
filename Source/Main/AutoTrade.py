@@ -94,6 +94,11 @@ def is_volatile(prices, candles, threshold_stdev=0.05, max_wick_ratio=0.7, highl
         
         if isinstance(prices, deque):
             prices = list(prices)
+        
+        trend_direction = prices[-1] - prices[-5]
+        if abs(trend_direction) > some_threshold:
+            # 方向感があるので乱高下ではない
+            return False
 
         stdev_value = statistics.stdev(prices[-5:])
         if stdev_value > threshold_stdev:
