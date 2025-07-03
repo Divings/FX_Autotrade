@@ -85,16 +85,15 @@ import statistics
 
 def is_volatile(prices, candles,
                 threshold_stdev=0.05,
-                max_wick_ratio=0.7,
-                highlow_threshold=0.10,
+                max_wick_ratio=1.0,   # 緩め
+                highlow_threshold=0.15,  # 緩め
                 period=5,
-                trend_multiplier=1.5):
+                trend_multiplier=0.8):  # 方向感に寛容
     """
-    乱高下を検出する関数（方向感が強い急騰・急落は除外）
-    trend_threshold は標準偏差の1.5倍（デフォルト）で自動決定
+    トレンド重視の乱高下判定
     """
-    from collections import deque
     import statistics
+    from collections import deque
 
     if not isinstance(prices, (list, tuple, deque)) or len(prices) < period:
         return False
@@ -104,25 +103,19 @@ def is_volatile(prices, candles,
     if isinstance(prices, deque):
         prices = list(prices)
 
-    # 標準偏差
     try:
         stdev_value = statistics.stdev(prices[-period:])
     except statistics.StatisticsError:
         return False
 
-    # 方向感の大きさ
+    # 方向感
     trend_direction = prices[-1] - prices[-period]
-
-    # しきい値を stdev の倍数で自動計算
     trend_threshold = stdev_value * trend_multiplier
 
-    if stdev_value > threshold_stdev:
-        # 方向感が強ければトレンド → 乱高下ではない
-        if abs(trend_direction) >= trend_threshold:
-            return False
-        return True
+    if abs(trend_direction) >= trend_threshold:
+        return False  # トレンドなので乱高下ではない
 
-    # ヒゲ判定
+    # ヒゲ
     last = candles[-1]
     body = abs(last['open'] - last['close'])
     upper_wick = last['high'] - max(last['open'], last['close'])
@@ -131,9 +124,13 @@ def is_volatile(prices, candles,
     if wick_ratio > max_wick_ratio:
         return True
 
-    # high-low 幅
+    # high-low
     highlow_diff = last['high'] - last['low']
     if highlow_diff > highlow_threshold:
+        return True
+
+    # ボラが高く方向感もないなら乱高下
+    if stdev_value > threshold_stdev:
         return True
 
     return False
