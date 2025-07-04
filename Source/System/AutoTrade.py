@@ -1208,24 +1208,27 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
 
     candles = build_last_2_candles_from_prices(list(price_buffer))
-     
+    if not candles or len(candles) < 2:
+        logging.error("ローソク足データが不足しているためスキップ")
+        notify_slack("ローソク足データが不足しているためスキップ")
+        return     
     skip, reason = should_skip_entry(candles, trend)
+
     if skip:
         shared_state["trend"] = None
         logging.info(f"[エントリースキップ] {reason}")
         notify_slack(f"[スキップ] {reason}")
         await asyncio.sleep(3)
-        return
-
-    a = first_order(trend, shared_state)
-    if a == 2:
-        logging.info(f"[結果] {trend} すでにポジションあり")
-    elif a == 1:
-        logging.info(f"[結果] {trend}  取引 成功")
-        shared_state["last_trend"] = trend
     else:
-        logging.error(f"[結果] {trend} 失敗")
-    logging.info(f"[エントリー判定] {trend} トレンド確定")
+        a = first_order(trend, shared_state)
+        if a == 2:
+            logging.info(f"[結果] {trend} すでにポジションあり")
+        elif a == 1:
+            logging.info(f"[結果] {trend}  取引 成功")
+            shared_state["last_trend"] = trend
+        else:
+            logging.error(f"[結果] {trend} 失敗")
+        logging.info(f"[エントリー判定] {trend} トレンド確定")
 
 def dynamic_filter(adx, rsi, bid, ask):
     now = datetime.datetime.now()
