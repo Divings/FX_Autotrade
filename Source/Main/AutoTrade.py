@@ -459,13 +459,18 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
                     last_notified[pid] = profit
         await asyncio.sleep(interval_sec)
 
-def should_skip_entry(candles, direction: str):
+def should_skip_entry(candles, direction: str, recent_resistance=None, recent_support=None, atr=None, min_atr=0.05):
     """
     BUY or SELL エントリー直前にスキップすべきかどうかを判定する関数
+    改善版：トレンド方向、高値/安値水準、ボラティリティも考慮
 
     Args:
         candles (list[dict]): 過去のローソク足（最低2本必要）
         direction (str): "BUY" または "SELL"
+        recent_resistance (float): 直近の高値ゾーン
+        recent_support (float): 直近の安値ゾーン
+        atr (float): 現在のATR値
+        min_atr (float): 最低限のボラティリティしきい値
 
     Returns:
         (bool, str): (スキップすべきか, 理由メッセージ)
@@ -476,10 +481,19 @@ def should_skip_entry(candles, direction: str):
     open1, close1 = prev["open"], prev["close"]
     high1, low1 = prev["high"], prev["low"]
     open2, close2 = last["open"], last["close"]
+    high2, low2 = last["high"], last["low"]
 
     def body(o, c): return abs(o - c)
 
+    # ボラティリティが低すぎる
+    if atr is not None and atr < min_atr:
+        return True, f"ボラティリティ不足（ATR={atr:.3f} < {min_atr}） → 見送り"
+
     if direction == "BUY":
+        # 直前足が陰線
+        if close1 < open1:
+            return True, "直前足が陰線 → BUY見送り"
+
         # 陽線2本連続
         if close1 > open1 and close2 > open2:
             return True, "陽線2本連続 → 高値警戒でBUY見送り"
@@ -489,7 +503,15 @@ def should_skip_entry(candles, direction: str):
         if upper_wick > body(open1, close1):
             return True, "上ヒゲ優勢 → BUY見送り"
 
+        # 高値ゾーンに到達
+        if recent_resistance is not None and high1 >= recent_resistance:
+            return True, "高値ゾーンで長いヒゲ → BUY見送り"
+
     elif direction == "SELL":
+        # 直前足が陽線
+        if close1 > open1:
+            return True, "直前足が陽線 → SELL見送り"
+
         # 陰線2本連続
         if close1 < open1 and close2 < open2:
             return True, "陰線2本連続 → 底値警戒でSELL見送り"
@@ -499,7 +521,12 @@ def should_skip_entry(candles, direction: str):
         if lower_wick > body(open1, close1):
             return True, "下ヒゲ優勢 → SELL見送り"
 
+        # 安値ゾーンに到達
+        if recent_support is not None and low1 <= recent_support:
+            return True, "安値ゾーンで長いヒゲ → SELL見送り"
+
     return False, ""
+
 
 def load_config_from_mysql():
     try:
@@ -1181,14 +1208,14 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
 
     candles = build_last_2_candles_from_prices(list(price_buffer))
-    if len(candles) >= 2:
-        skip, reason = should_skip_entry(candles, trend)
-        if skip:
-            shared_state["trend"] = None
-            logging.info(f"[エントリースキップ] {reason}")
-            notify_slack(f"[スキップ] {reason}")
-            await asyncio.sleep(3)
-            return
+     
+    skip, reason = should_skip_entry(candles, trend)
+    if skip:
+        shared_state["trend"] = None
+        logging.info(f"[エントリースキップ] {reason}")
+        notify_slack(f"[スキップ] {reason}")
+        await asyncio.sleep(3)
+        return
 
     a = first_order(trend, shared_state)
     if a == 2:
