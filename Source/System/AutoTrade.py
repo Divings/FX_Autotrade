@@ -325,6 +325,61 @@ def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     signal = macd.ewm(span=signal_period).mean()
     return macd.tolist(), signal.tolist()
 
+def is_macd_initial(macd, signal):
+    """
+    MACDがゼロを超えた直後かどうかを判定
+    """
+    if len(macd) < 2:
+        return False
+
+    # MACDが負→正に転じた
+    if macd[-2] < 0 and macd[-1] > 0:
+        return True
+    # MACDの傾きが正転
+    if macd[-1] > macd[-2] and macd[-1] > 0:
+        return True
+
+    return False
+
+def is_trend_initial(candles):
+    """
+    ローソク足2本を見て、トレンド初動っぽい動きか判定する。
+    - 買いの場合: 前の高値を更新して長い陽線
+    - 売りの場合: 前の安値を更新して長い陰線
+
+    Returns:
+        tuple: (bool, str)
+            bool: Trueなら初動
+            str: "BUY" または "SELL" または ""
+    """
+    if len(candles) < 2:
+        return False, ""
+
+    last = candles[-1]
+    prev = candles[-2]
+
+    # 実体の大きさ
+    body_last = abs(last["close"] - last["open"])
+    body_prev = abs(prev["close"] - prev["open"])
+
+    # 買いの初動（高値更新 & 長い陽線）
+    if (
+        last["close"] > prev["high"] and
+        (last["close"] - last["open"]) > body_prev and
+        last["close"] > last["open"]  # 陽線
+    ):
+        return True, "BUY"
+
+    # 売りの初動（安値更新 & 長い陰線）
+    if (
+        last["close"] < prev["low"] and
+        (last["open"] - last["close"]) > body_prev and
+        last["close"] < last["open"]  # 陰線
+    ):
+        return True, "SELL"
+
+    return False, ""
+
 # ===ログ設定 ===
 LOG_FILE1 = f"{temp_dir}/fx_debug_log.txt"
 try:
@@ -1528,6 +1583,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         candles = build_last_2_candles_from_prices(list(price_buffer))
         logging.info(f"[INFO] キャンドルデータ {candles}")
         range_value = calculate_range(candles, period=10)
+        
         if range_value != None:
             if adx >= 20 and range_value >= 0.1:
                 if nn_nonce == 0:
@@ -1618,6 +1674,20 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         short_stdev = statistics.stdev(list(price_buffer)[-5:])
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
         
+        is_initial, direction = is_trend_initial(candles)
+        if is_initial:
+            # 簡易フィルター
+            positions = get_positions()
+            if not positions:
+                if spread < MAX_SPREAD and adx >= 20:
+                    logging.info(f"初動検出、方向: {direction} → エントリー")
+                    notify_slack(f"初動検出、方向: {direction} → エントリー")
+                    first_order(direction, shared_state)
+                else:
+                    logging.info(f"初動だが条件未達 → 見送り")
+        else:
+            logging.info("初動ではない")
+
         if short_stdev > VOL_THRESHOLD_SHORT and long_stdev > VOL_THRESHOLD_LONG:
             
             trend = "BUY" if diff > 0 else "SELL"

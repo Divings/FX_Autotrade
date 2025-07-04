@@ -4,7 +4,7 @@ import requests
 import time
 from dotenv import load_dotenv
 from conf_load import load_settings_from_db
-
+import hashlib
 import configparser
 
 def load_config():
@@ -29,10 +29,11 @@ SLACK_WEBHOOK_URL = config1["SLACK_WEBHOOK_URL"]
 _last_notify_times = {}
 _NOTIFY_COOLDOWN_SECONDS = 60  # 同じ内容は60秒間送らない
 
+Buffers = None
 def notify_slack(message: str):
     if not SLACK_WEBHOOK_URL:
         raise ValueError("SLACK_WEBHOOK_URL is not set.")
-        
+    
     now = time.time()
     last_sent = _last_notify_times.get(message)
     if last_sent and (now - last_sent < _NOTIFY_COOLDOWN_SECONDS):
