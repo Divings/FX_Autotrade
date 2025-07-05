@@ -768,9 +768,12 @@ BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
 out = assets(API_KEY,API_SECRET)
-available_amounts = out['data']['availableAmount']
-available_amount = int(float(out['data']['availableAmount']))
-notify_slack(f"現在の取引余力は{available_amount}円です。")
+try:
+    available_amounts = out['data']['availableAmount']
+    available_amount = int(float(out['data']['availableAmount']))
+    notify_slack(f"現在の取引余力は{available_amount}円です。")
+except:
+    pass
 
 if os.path.isfile("pricesData.txt") == False and now.hour>=1:
     with open("pricesData.txt", "w", encoding="utf-8") as f:
