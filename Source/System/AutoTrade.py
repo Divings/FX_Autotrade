@@ -1679,12 +1679,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             # 簡易フィルター
             positions = get_positions()
             if not positions:
-                if spread < MAX_SPREAD and adx >= 20:
+        
+                # BUY or SELL によって RSI のしきい値を設定
+                rsi_ok = True
+                if direction == "BUY" and rsi >= 70:
+                    rsi_ok = False
+                if direction == "SELL" and rsi <= 30:
+                    rsi_ok = False
+
+                if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
                     first_order(direction, shared_state)
                 else:
-                    logging.info(f"初動だが条件未達 → 見送り")
+                    logging.info(f"初動だが条件未達 → 見送り (spread={spread}, adx={adx}, rsi={rsi})")
+            else:
+                logging.info(f"建玉あり → エントリーせず")
         else:
             logging.info("初動ではない")
 
