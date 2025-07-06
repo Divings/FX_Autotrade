@@ -83,6 +83,11 @@ from EncryptSecureDEC import decrypt_file
 
 import statistics
 
+import platform
+if platform.python_version() != "3.9.21":
+    notify_slack("エラー:動作保証バージョンを満たしていません")
+    sys.exit(1)
+
 def is_volatile(prices, candles, period=5):
     import statistics
     from collections import deque
