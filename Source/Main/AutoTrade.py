@@ -346,7 +346,7 @@ def is_macd_initial(macd, signal):
 
     return False
 
-def is_trend_initial(candles, min_body_size=0.001, min_breakout_ratio=0.001):
+def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
     """
     2本のローソク足から初動を判定（緩め）
     """
