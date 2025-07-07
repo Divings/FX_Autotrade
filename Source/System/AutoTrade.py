@@ -1272,9 +1272,10 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
 
     candles = build_last_2_candles_from_prices(list(price_buffer))
     if not candles or len(candles) < 2:
+        logging.info(candles)
         logging.error("ローソク足データが不足しているためスキップ")
         notify_slack("ローソク足データが不足しているためスキップ")
-        return     
+        return
     skip, reason = should_skip_entry(candles, trend)
 
     if skip:
