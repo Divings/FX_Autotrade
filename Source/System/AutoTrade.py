@@ -1486,7 +1486,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         high_prices.append(ask)
         low_prices.append(bid)
         close_prices.append(mid)
-        logging.info(f"price_bufferの長さ: {len(price_buffer)}")
+        
         if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
             logging.info(f"[待機中] ADX計算用に蓄積中: {len(close_prices)}/28")
             await asyncio.sleep(interval_sec)
@@ -1531,7 +1531,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         sma_cross_up = short_ma > long_ma and shared_state.get("last_short_ma", 0) <= shared_state.get("last_long_ma", 0)
         sma_cross_down = short_ma < long_ma and shared_state.get("last_short_ma", 0) >= shared_state.get("last_long_ma", 0)
-        
+        logging.info(f"price_bufferの長さ: {len(price_buffer)}")
         logging.info(f"[INFO] SMA クロス SMA_UP = {sma_cross_up} SMA_DOWN = {sma_cross_down}")
         shared_state["last_short_ma"] = short_ma
         shared_state["last_long_ma"] = long_ma
@@ -1595,7 +1595,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         
         candles = build_last_2_candles_from_prices(list(price_buffer))
-        candles = candle_buffer + candles
+        candles = candle_buffer[-1:] + candles
         if len(candle_buffer) > 50:
             candle_buffer=candle_buffer[-50]
         logging.info(f"[INFO] キャンドルデータ {candles}")
