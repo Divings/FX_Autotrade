@@ -554,19 +554,20 @@ def should_skip_entry(candles, direction: str, recent_resistance=None, recent_su
         if close1 < open1:
             return True, "直前足が陰線 → BUY見送り"
 
-        # 陽線2本連続
-        if close1 > open1 and close2 > open2:
-            return True, "陽線2本連続 → 高値警戒でBUY見送り"
-
         # 上ヒゲが長い（失速）
         upper_wick = high1 - max(open1, close1)
         if upper_wick > body(open1, close1):
             return True, "上ヒゲ優勢 → BUY見送り"
-
-        # 高値ゾーンに到達
-        if recent_resistance is not None and high1 >= recent_resistance:
-            return True, "高値ゾーンで長いヒゲ → BUY見送り"
-
+        
+        range1 = candles[-1]["high"] - candles[-1]["low"]
+        range2 = candles[-2]["high"] - candles[-2]["low"]
+        avg_range = (range1 + range2) / 2
+        tolerance = avg_range * 0.3
+        
+        # 高値ゾーンに近い（過去n本の最高値に近い）
+        if recent_resistance is not None and abs(high1 - recent_resistance) < tolerance:
+            return True, "高値ゾーン接近 → BUY見送り"
+       
     elif direction == "SELL":
         # 直前足が陽線
         if close1 > open1:
