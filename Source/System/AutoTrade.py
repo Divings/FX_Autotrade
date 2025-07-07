@@ -1707,7 +1707,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     rsi_ok = False
                 if direction == "SELL" and rsi <= 30:
                     rsi_ok = False
+                skip, reason = should_skip_entry(candles, trend)
 
+                if skip:
+                    shared_state["trend"] = None
+                    logging.info(f"[エントリースキップ] {reason}")
+                    notify_slack(f"[スキップ] {reason}")
+                    continue
                 if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
