@@ -287,7 +287,8 @@ shared_state = {
     "cmd":None,
     "trend_start_time":None,
     "oders_error":False,
-    "last_skip_hash":None
+    "last_skip_hash":None,
+    "cooldown_until":None
 }
 
 import configparser
@@ -350,6 +351,10 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
     """
     2本のローソク足から初動を判定（緩め）
     """
+    if shared_state.get("cooldown_until", 0) > time.time():
+    # まだクールタイム中
+        return False,""
+    
     if len(candles) < 2:
         return False, ""
 
@@ -1708,7 +1713,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
                     first_order(direction, shared_state)
                     direction = None
+                    is_initial = None
                     shared_state["trend"] = None
+                    shared_state["cooldown_until"] = time.time() + 300
                 else:
                     logging.info(f"初動だが条件未達 → 見送り (spread={spread}, adx={adx}, rsi={rsi})")
             else:
