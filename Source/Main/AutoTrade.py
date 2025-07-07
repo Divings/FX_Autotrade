@@ -1708,6 +1708,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
                     first_order(direction, shared_state)
+                    direction = None
                 else:
                     logging.info(f"初動だが条件未達 → 見送り (spread={spread}, adx={adx}, rsi={rsi})")
             else:
