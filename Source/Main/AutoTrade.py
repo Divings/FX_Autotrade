@@ -1595,9 +1595,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         
         candles = build_last_2_candles_from_prices(list(price_buffer))
-        candles = candle_buffer[-1:] + candles
-        if len(candle_buffer) > 50:
-            candle_buffer=candle_buffer[-50]
+        #candles = candle_buffer[-1:] + candles
+        # if len(candle_buffer) > 50:
+        #    candle_buffer=candle_buffer[-50]
         logging.info(f"[INFO] キャンドルデータ {candles}")
         range_value = calculate_range(candles, period=10)
         
