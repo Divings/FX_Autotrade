@@ -588,7 +588,6 @@ def should_skip_entry(candles, direction: str, recent_resistance=None, recent_su
 
     return False, ""
 
-
 def load_config_from_mysql():
     try:
         conn = mysql.connector.connect(
@@ -651,8 +650,6 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             # 利益計算
             raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
             profit = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-
 
             # profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
@@ -1711,6 +1708,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
                     first_order(direction, shared_state)
                     direction = None
+                    shared_state["trend"] = None
                 else:
                     logging.info(f"初動だが条件未達 → 見送り (spread={spread}, adx={adx}, rsi={rsi})")
             else:
