@@ -1691,6 +1691,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         short_stdev = statistics.stdev(list(price_buffer)[-5:])
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
         
+        
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
