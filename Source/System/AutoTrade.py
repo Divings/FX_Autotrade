@@ -1250,11 +1250,12 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
     candles=[]
 
-    # 直近2分分の価格を20本ずつに分割してローソク足を作る
     for i in range(2):
-        slice = prices[-(40 - i*20):- (20 - i*20)]
-        if len(slice) < 1:
-            continue  # または return [] にしてもよい
+        start = -40 + i*20
+        end = None if i == 1 else start + 20
+        slice = prices[start:end]
+        if not slice:
+            continue
         candle = {
             "open": slice[0],
             "close": slice[-1],
