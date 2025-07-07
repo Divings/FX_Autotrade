@@ -346,16 +346,9 @@ def is_macd_initial(macd, signal):
 
     return False
 
-def is_trend_initial(candles):
+def is_trend_initial(candles, min_body_size=0.001, min_breakout_ratio=0.001):
     """
-    ローソク足2本を見て、トレンド初動っぽい動きか判定する。
-    - 買いの場合: 前の高値を更新して長い陽線
-    - 売りの場合: 前の安値を更新して長い陰線
-
-    Returns:
-        tuple: (bool, str)
-            bool: Trueなら初動
-            str: "BUY" または "SELL" または ""
+    2本のローソク足から初動を判定（緩め）
     """
     if len(candles) < 2:
         return False, ""
@@ -363,23 +356,30 @@ def is_trend_initial(candles):
     last = candles[-1]
     prev = candles[-2]
 
-    # 実体の大きさ
     body_last = abs(last["close"] - last["open"])
     body_prev = abs(prev["close"] - prev["open"])
+    range_prev = prev["high"] - prev["low"]
+    range_last = last["high"] - last["low"]
 
-    # 買いの初動（高値更新 & 長い陽線）
+    # 最低実体サイズチェック
+    if body_last < min_body_size:
+        return False, ""
+
+    # 買いの初動
     if (
         last["close"] > prev["high"] and
         (last["close"] - last["open"]) > body_prev and
-        last["close"] > last["open"]  # 陽線
+        last["close"] > last["open"] and
+        (last["close"] - prev["high"]) >= min_breakout_ratio
     ):
         return True, "BUY"
 
-    # 売りの初動（安値更新 & 長い陰線）
+    # 売りの初動
     if (
         last["close"] < prev["low"] and
         (last["open"] - last["close"]) > body_prev and
-        last["close"] < last["open"]  # 陰線
+        last["close"] < last["open"] and
+        (prev["low"] - last["close"]) >= min_breakout_ratio
     ):
         return True, "SELL"
 
