@@ -1249,7 +1249,7 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
         return []
 
     candles=[]
-
+    logging.info(f"price_bufferの長さ: {len(price_buffer)}")
     for i in range(2):
         start = -40 + i*20
         end = None if i == 1 else start + 20
@@ -1331,6 +1331,7 @@ def dynamic_filter(adx, rsi, bid, ask):
 
     return True
 
+candle_buffer = []
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     import statistics
@@ -1339,7 +1340,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     from datetime import date
     import time
     import logging
-
+    global candle_buffer
     global price_buffer
     # price_buffer = deque(maxlen=240)
     global MAX_SPREAD
@@ -1594,6 +1595,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         
         candles = build_last_2_candles_from_prices(list(price_buffer))
+        candles = candle_buffer + candles
+        if len(candle_buffer) > 50:
+            candle_buffer=candle_buffer[-50]
         logging.info(f"[INFO] キャンドルデータ {candles}")
         range_value = calculate_range(candles, period=10)
         
