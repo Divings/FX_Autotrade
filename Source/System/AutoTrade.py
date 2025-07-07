@@ -1265,15 +1265,15 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
     return candles
 
-async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
+async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles):
     shared_state["trend"] = trend
     shared_state["trend_start_time"] = datetime.datetime.now()
     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
 
-    candles = build_last_2_candles_from_prices(list(price_buffer))
-    if len(price_buffer) < 40:
-        logging.info("価格履歴がまだ不足しているので待機")
-        return
+    #candles = build_last_2_candles_from_prices(list(price_buffer))
+    #if len(price_buffer) < 40:
+    #    logging.info("価格履歴がまだ不足しているので待機")
+    #    return
     if not candles or len(candles) < 2:
         logging.info(candles)
         logging.error("ローソク足データが不足しているためスキップ")
@@ -1754,14 +1754,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(msg)
                     notify_slack(msg)
                     continue  # エントリーしない
-                await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str)
+                await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles)
             elif stc and trend == "SELL" and (macd_cross_down) and sma_cross_down and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
                 if is_high_volatility(close_prices):
                     msg = f"[スキップ] {trend} ボラティリティ高のためエントリースキップ"
                     logging.info(msg)
                     notify_slack(msg)
                     continue  # エントリーしない
-                await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str)
+                await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str,candles)
             elif positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
                 positions = get_positions()
