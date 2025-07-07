@@ -1248,7 +1248,7 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
     if len(prices) < 40:
         return []
 
-    candles = []
+    candles=[]
 
     # 直近2分分の価格を20本ずつに分割してローソク足を作る
     for i in range(2):
@@ -1271,6 +1271,9 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str):
     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
 
     candles = build_last_2_candles_from_prices(list(price_buffer))
+    if len(price_buffer) < 40:
+        logging.info("価格履歴がまだ不足しているので待機")
+        return
     if not candles or len(candles) < 2:
         logging.info(candles)
         logging.error("ローソク足データが不足しているためスキップ")
@@ -1481,7 +1484,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         high_prices.append(ask)
         low_prices.append(bid)
         close_prices.append(mid)
-        
+        logging.info(f"price_bufferの長さ: {len(price_buffer)}")
         if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
             logging.info(f"[待機中] ADX計算用に蓄積中: {len(close_prices)}/28")
             await asyncio.sleep(interval_sec)
