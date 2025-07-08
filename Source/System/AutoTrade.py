@@ -288,7 +288,7 @@ shared_state = {
     "trend_start_time":None,
     "oders_error":False,
     "last_skip_hash":None,
-    "cooldown_until":None,
+    "cooldown_untils":None,
     "firsts":False
 }
 
@@ -350,23 +350,24 @@ def is_macd_initial(macd, signal):
 
 def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
     """
-    2本のローソク足から初動を判定（緩め）
+    ローソク足リスト（最低3本）から初動を判定（3本版）
     """
-    if shared_state.get("cooldown_until", 0) > time.time():
-    # まだクールタイム中
+    if shared_state.get("cooldown_untils", 0) > time.time():
+        # まだクールタイム中
         notify_slack("[スキップ] クールタイム中なので初動判定をスキップ")
-        return False,""
-    
-    if len(candles) < 2:
         return False, ""
 
-    last = candles[-1]
+    if len(candles) < 3:
+        return False, ""
+
+    # 末尾の3本を使う
+    prev_prev = candles[-3]
     prev = candles[-2]
+    last = candles[-1]
 
     body_last = abs(last["close"] - last["open"])
     body_prev = abs(prev["close"] - prev["open"])
-    range_prev = prev["high"] - prev["low"]
-    range_last = last["high"] - last["low"]
+    body_prev_prev = abs(prev_prev["close"] - prev_prev["open"])
 
     # 最低実体サイズチェック
     if body_last < min_body_size:
@@ -374,7 +375,8 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
 
     # 買いの初動
     if (
-        last["close"] > prev["high"] and
+        prev["close"] > prev_prev["close"] and  # まず2本で上昇
+        last["close"] > prev["high"] and        # さらに直近でブレイク
         (last["close"] - last["open"]) > body_prev and
         last["close"] > last["open"] and
         (last["close"] - prev["high"]) >= min_breakout_ratio
@@ -383,7 +385,8 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
 
     # 売りの初動
     if (
-        last["close"] < prev["low"] and
+        prev["close"] < prev_prev["close"] and  # まず2本で下降
+        last["close"] < prev["low"] and         # さらに直近でブレイク
         (last["open"] - last["close"]) > body_prev and
         last["close"] < last["open"] and
         (prev["low"] - last["close"]) >= min_breakout_ratio
@@ -579,16 +582,7 @@ def should_skip_entry(candles, direction: str, recent_resistance=None, recent_su
         # 直前足が陽線
         if close1 > open1:
             return True, "直前足が陽線 → SELL見送り"
-
-        # 陰線2本連続
-        if close1 < open1 and close2 < open2:
-            return True, "陰線2本連続 → 底値警戒でSELL見送り"
-
-        # 下ヒゲが長い（反発）
-        lower_wick = min(open1, close1) - low1
-        if lower_wick > body(open1, close1):
-            return True, "下ヒゲ優勢 → SELL見送り"
-
+     
         # 安値ゾーンに到達
         if recent_support is not None and low1 <= recent_support:
             return True, "安値ゾーンで長いヒゲ → SELL見送り"
@@ -680,7 +674,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 record_result(profit, shared_state)
                 write_log("LOSS_CUT_FAST", bid)
                 if shared_state.get("firsts")==True:
-                    shared_state["cooldown_until"] = time.time() + 300
+                    shared_state["cooldown_untils"] = time.time() + 300
                     shared_state["firsts"] = False
                 # 遅延ログも記録
                 elapsed = end - start
@@ -1273,6 +1267,33 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
     return candles
 
+def build_last_n_candles_from_prices(prices: list[float], n: int = 20) -> list[dict]:
+    """
+    price_buffer から直近n本のローソク足を構築
+    1分あたり20本程度の粒度と仮定
+    """
+    required_len = n * 20
+    if len(prices) < required_len:
+        return []
+
+    candles = []
+    logging.info(f"price_bufferの長さ: {len(prices)}")
+    for i in range(n):
+        start = -required_len + i*20
+        end = start + 20
+        slice = prices[start:end]
+        if not slice:
+            continue
+        candle = {
+            "open": slice[0],
+            "close": slice[-1],
+            "high": max(slice),
+            "low": min(slice),
+        }
+        candles.append(candle)
+
+    return candles
+
 async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles):
     shared_state["trend"] = trend
     shared_state["trend_start_time"] = datetime.datetime.now()
@@ -1601,7 +1622,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[MACD] クロス判定: UP={macd_cross_up}, DOWN={macd_cross_down}")
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         
-        candles = build_last_2_candles_from_prices(list(price_buffer))
+        candles = build_last_n_candles_from_prices(list(price_buffer),n=20)
         #candles = candle_buffer[-1:] + candles
         # if len(candle_buffer) > 50:
         #    candle_buffer=candle_buffer[-50]
@@ -1711,13 +1732,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     rsi_ok = False
                 if direction == "SELL" and rsi <= 30:
                     rsi_ok = False
-                skip, reason = should_skip_entry(candles, trend)
-
-                if skip:
-                    shared_state["trend"] = None
-                    logging.info(f"[エントリースキップ] {reason}")
-                    notify_slack(f"[スキップ] {reason}")
-                    continue
+                
                 if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
@@ -1725,7 +1740,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     direction = None
                     is_initial = None
                     shared_state["trend"] = None
-                    shared_state["cooldown_until"] = time.time() + 300
+                    shared_state["cooldown_untils"] = time.time() + 300
                     shared_state["firsts"] = True
                 else:
                     logging.info(f"初動だが条件未達 → 見送り (spread={spread}, adx={adx}, rsi={rsi})")
@@ -1937,7 +1952,7 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
                 record_result(profit, shared_state)
                 write_log("QUICK_PROFIT", bid)
                 if shared_state.get("firsts")==True:
-                    shared_state["cooldown_until"] = time.time() + 300
+                    shared_state["cooldown_untils"] = time.time() + 300
                     shared_state["firsts"] = False
                 elapsed_api = end - start
                 if elapsed_api > 0.5:
