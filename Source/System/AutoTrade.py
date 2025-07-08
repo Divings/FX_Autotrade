@@ -332,42 +332,26 @@ def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     signal = macd.ewm(span=signal_period).mean()
     return macd.tolist(), signal.tolist()
 
-def is_macd_initial(macd, signal):
-    """
-    MACDがゼロを超えた直後かどうかを判定
-    """
-    if len(macd) < 2:
-        return False
-
-    # MACDが負→正に転じた
-    if macd[-2] < 0 and macd[-1] > 0:
-        return True
-    # MACDの傾きが正転
-    if macd[-1] > macd[-2] and macd[-1] > 0:
-        return True
-
-    return False
-
 def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
     """
-    ローソク足リスト（最低3本）から初動を判定（3本版）
+    ローソク足リスト（最低2本）から初動を判定（緩め）
     """
     if shared_state.get("cooldown_untils", 0) > time.time():
         # まだクールタイム中
         notify_slack("[スキップ] クールタイム中なので初動判定をスキップ")
         return False, ""
 
-    if len(candles) < 3:
+    if len(candles) < 2:
         return False, ""
 
-    # 末尾の3本を使う
-    prev_prev = candles[-3]
+    # 末尾の2本を使う
     prev = candles[-2]
     last = candles[-1]
 
     body_last = abs(last["close"] - last["open"])
     body_prev = abs(prev["close"] - prev["open"])
-    body_prev_prev = abs(prev_prev["close"] - prev_prev["open"])
+    range_prev = prev["high"] - prev["low"]
+    range_last = last["high"] - last["low"]
 
     # 最低実体サイズチェック
     if body_last < min_body_size:
@@ -375,8 +359,7 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
 
     # 買いの初動
     if (
-        prev["close"] > prev_prev["close"] and  # まず2本で上昇
-        last["close"] > prev["high"] and        # さらに直近でブレイク
+        last["close"] > prev["high"] and
         (last["close"] - last["open"]) > body_prev and
         last["close"] > last["open"] and
         (last["close"] - prev["high"]) >= min_breakout_ratio
@@ -385,8 +368,7 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
 
     # 売りの初動
     if (
-        prev["close"] < prev_prev["close"] and  # まず2本で下降
-        last["close"] < prev["low"] and         # さらに直近でブレイク
+        last["close"] < prev["low"] and
         (last["open"] - last["close"]) > body_prev and
         last["close"] < last["open"] and
         (prev["low"] - last["close"]) >= min_breakout_ratio
@@ -1622,7 +1604,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[MACD] クロス判定: UP={macd_cross_up}, DOWN={macd_cross_down}")
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         
-        candles = build_last_n_candles_from_prices(list(price_buffer),n=20)
+        candles = build_last_2_candles_from_prices(list(price_buffer))
         #candles = candle_buffer[-1:] + candles
         # if len(candle_buffer) > 50:
         #    candle_buffer=candle_buffer[-50]
