@@ -354,6 +354,7 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
     """
     if shared_state.get("cooldown_until", 0) > time.time():
     # まだクールタイム中
+        notify_slack("[スキップ] クールタイム中なので初動判定をスキップ")
         return False,""
     
     if len(candles) < 2:
