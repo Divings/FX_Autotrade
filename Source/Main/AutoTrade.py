@@ -288,7 +288,8 @@ shared_state = {
     "trend_start_time":None,
     "oders_error":False,
     "last_skip_hash":None,
-    "cooldown_until":None
+    "cooldown_until":None,
+    "firsts":False
 }
 
 import configparser
@@ -677,7 +678,9 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 
                 record_result(profit, shared_state)
                 write_log("LOSS_CUT_FAST", bid)
-                
+                if shared_state.get("firsts")==True:
+                    shared_state["cooldown_until"] = time.time() + 300
+                    shared_state["firsts"] = False
                 # 遅延ログも記録
                 elapsed = end - start
                 if elapsed > 0.5:
@@ -1722,6 +1725,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     is_initial = None
                     shared_state["trend"] = None
                     shared_state["cooldown_until"] = time.time() + 300
+                    shared_state["firsts"] = True
                 else:
                     logging.info(f"初動だが条件未達 → 見送り (spread={spread}, adx={adx}, rsi={rsi})")
             else:
@@ -1800,6 +1804,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         close_side = "SELL" if side == "BUY" else "BUY"
                     close_order(pid, size_str, close_side)
                     write_log(close_side, bid)
+                    
             elif positions and trend == "BUY" and macd_cross_down:
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
                 positions = get_positions()
@@ -1930,7 +1935,9 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
 
                 record_result(profit, shared_state)
                 write_log("QUICK_PROFIT", bid)
-
+                if shared_state.get("firsts")==True:
+                    shared_state["cooldown_until"] = time.time() + 300
+                    shared_state["firsts"] = False
                 elapsed_api = end - start
                 if elapsed_api > 0.5:
                     logging.warning(f"[遅延警告] 利確リクエストに {elapsed_api:.2f} 秒かかりました")
