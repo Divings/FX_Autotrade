@@ -45,11 +45,50 @@ SYS_VER = "3.5.6"
 
 import numpy as np
 
-def calculate_range(candles, period=10):
-    if len(candles) < period:
-        return None  # または None でもOK
-    highs = [candle['high'] for candle in candles[-period:]]
-    lows  = [candle['low'] for candle in candles[-period:]]
+def build_last_n_candles_from_prices(prices: list[float], n: int = 20) -> list[dict]:
+    """
+    prices から直近 n 本のローソク足を構築
+    1本あたり20ティックで構成
+    """
+    ticks_per_candle = 20
+    max_candles = len(prices) // ticks_per_candle
+    candles_to_build = min(n, max_candles)
+
+    if candles_to_build == 0:
+        logging.warning("データが不足しています。ローソク足を生成できません。")
+        return []
+
+    logging.info(f"price_bufferの長さ: {len(prices)} / 作れるローソク足: {candles_to_build}")
+
+    candles = []
+
+    for i in range(candles_to_build):
+        end = len(prices) - i * ticks_per_candle
+        start = max(0, end - ticks_per_candle)
+        slice = prices[start:end]
+        if not slice:
+            continue
+        candle = {
+            "open": slice[0],
+            "close": slice[-1],
+            "high": max(slice),
+            "low": min(slice),
+        }
+        candles.insert(0, candle)  # 時系列順にするため先頭に挿入
+
+    return candles
+
+def calculate_range(price_buffer, period=10):
+    candles = build_last_n_candles_from_prices(list(price_buffer), n=period)
+
+    if not candles:
+        # ローソク足が1本も作れなければ None
+        return None
+
+    actual_period = min(period, len(candles))
+    highs = [candle['high'] for candle in candles[-actual_period:]]
+    lows  = [candle['low'] for candle in candles[-actual_period:]]
+
     return max(highs) - min(lows)
 
 def calculate_dmi(highs, lows, closes, period=14):
@@ -1249,33 +1288,6 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
     return candles
 
-def build_last_n_candles_from_prices(prices: list[float], n: int = 20) -> list[dict]:
-    """
-    price_buffer から直近n本のローソク足を構築
-    1分あたり20本程度の粒度と仮定
-    """
-    required_len = n * 20
-    if len(prices) < required_len:
-        return []
-
-    candles = []
-    logging.info(f"price_bufferの長さ: {len(prices)}")
-    for i in range(n):
-        start = -required_len + i*20
-        end = start + 20
-        slice = prices[start:end]
-        if not slice:
-            continue
-        candle = {
-            "open": slice[0],
-            "close": slice[-1],
-            "high": max(slice),
-            "low": min(slice),
-        }
-        candles.append(candle)
-
-    return candles
-
 async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles):
     shared_state["trend"] = trend
     shared_state["trend_start_time"] = datetime.datetime.now()
@@ -1608,8 +1620,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         #candles = candle_buffer[-1:] + candles
         # if len(candle_buffer) > 50:
         #    candle_buffer=candle_buffer[-50]
-        logging.info(f"[INFO] キャンドルデータ {candles}")
-        range_value = calculate_range(candles, period=10)
+        logging.info(f"[INFO] キャンドルデータ2本分 {candles}")
+        range_value = calculate_range(price_buffer, period=10)
         
         if range_value != None:
             if adx >= 20 and range_value >= 0.1:
