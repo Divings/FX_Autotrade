@@ -1639,25 +1639,30 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 entry = float(pos["price"])
                 size = int(pos["size"])
                 elapsed = time.time() - shared_state.get("entry_time", time.time())
-                
+        
                 prices = get_price()
                 ask = prices["ask"]
                 bid = prices["bid"]
-                
+        
                 # 現在利益の計算
                 profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
-                if profit > 0 and profit == max_profits[pid]:
-                    logging.info(f"[トレール更新] 建玉{pid} 現在の最大利益更新: {profit}円")
+
                 # 最大利益の更新
-                if pid not in max_profits or profit > max_profits[pid]:
+                if pid not in max_profits:
                     max_profits[pid] = profit
+                elif profit > max_profits[pid]:
+                    max_profits[pid] = profit
+                if profit > 0:
+                    logging.info(f"[トレール更新] 建玉{pid} 現在の最大利益更新: {profit}円")
 
                 # トレーリングストップ判定
                 if profit <= max_profits[pid] - TRAILING_STOP:
                     notify_slack(f"[トレーリングストップ] 建玉{pid} 最大利益{max_profits[pid]}円 → 利益確保して決済")
                     close_order(pid, size, reverse_side(side))
                     record_result(profit, shared_state)
-                    del max_profits[pid]
+                    # 削除する前に確認
+                    if pid in max_profits:
+                        del max_profits[pid]
 
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
