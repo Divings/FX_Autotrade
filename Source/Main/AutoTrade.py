@@ -328,7 +328,9 @@ shared_state = {
     "oders_error":False,
     "last_skip_hash":None,
     "cooldown_untils":None,
-    "firsts":False
+    "firsts":False,
+    "max_profit":None,  # 保有中に記録された最大利益
+    "trail_offset":20
 }
 
 import configparser
@@ -1376,7 +1378,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     VOL_THRESHOLD_SHORT = 0.006
     VOL_THRESHOLD_LONG = 0.008
     import hashlib
-
+    last_notified = {}  # 建玉ごとの通知済みprofit記録
+    max_profits = {}    # 建玉ごとの最大利益記録
+    TRAILING_STOP = 15
+    
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
@@ -1535,7 +1540,39 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             nstop = 0
-            
+        positions = get_positions()
+        if positions:
+            prices = get_price()
+            ask = prices["ask"]
+            bid = prices["bid"]
+
+            for pos in positions:
+                pid = pos["positionId"]
+                side = pos.get("side", "BUY").upper()
+                entry = float(pos["price"])
+                size = int(pos["size"])
+                elapsed = time.time() - shared_state.get("entry_time", time.time())
+                
+                prices = get_price()
+                ask = prices["ask"]
+                bid = prices["bid"]
+                
+                # 現在利益の計算
+                profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
+                if profit > 0 and profit == max_profits[pid]:
+                    logging.info(f"[トレール更新] 建玉{pid} 現在の最大利益更新: {profit}円")
+                # 最大利益の更新
+                if pid not in max_profits or profit > max_profits[pid]:
+                    max_profits[pid] = profit
+
+                # トレーリングストップ判定
+                if profit <= max_profits[pid] - TRAILING_STOP:
+                    notify_slack(f"[トレーリングストップ] 建玉{pid} 最大利益{max_profits[pid]}円 → 利益確保して決済")
+                    close_order(pid, size, reverse_side(side))
+                    record_result(profit, shared_state)
+                    del max_profits[pid]
+                    continue  # 他の建玉も見る
+        
         if positions:
             bid = prices["bid"]
             ask = prices["ask"]
