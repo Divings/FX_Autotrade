@@ -40,7 +40,7 @@ from Assets import assets
 
 # ミッドナイトモード(Trueで有効化)
 night = True
-
+MAX_Stop = 180
 SYS_VER = "3.5.6"
 
 import numpy as np
@@ -533,6 +533,9 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             if elapsed > MAX_HOLD:
+                if shared_state.get("firsts")==True:
+                    logging.info("延長 保有時間超過だが初動検知のためスキップ")
+                    return
                 if profit > EXTENDABLE_LOSS and shared_state.get("trend") == side:
                     logging.info("[延長] 保有時間超過だがトレンド継続中のため保持")
                     return  # 決済せず延長
@@ -695,7 +698,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 record_result(profit, shared_state)
                 write_log("LOSS_CUT_FAST", bid)
                 if shared_state.get("firsts")==True:
-                    shared_state["cooldown_untils"] = time.time() + 300
+                    shared_state["cooldown_untils"] = time.time() + MAX_STOP
                     shared_state["firsts"] = False
                 # 遅延ログも記録
                 elapsed = end - start
@@ -1734,7 +1737,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     direction = None
                     is_initial = None
                     shared_state["trend"] = None
-                    shared_state["cooldown_untils"] = time.time() + 300
+                    shared_state["cooldown_untils"] = time.time() + MAX_STOP
                     shared_state["firsts"] = True
                 else:
                     logging.info(f"初動だが条件未達 → 見送り (spread={spread}, adx={adx}, rsi={rsi})")
@@ -1946,7 +1949,7 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
                 record_result(profit, shared_state)
                 write_log("QUICK_PROFIT", bid)
                 if shared_state.get("firsts")==True:
-                    shared_state["cooldown_untils"] = time.time() + 300
+                    shared_state["cooldown_untils"] = time.time() + MAX_STOP
                     shared_state["firsts"] = False
                 elapsed_api = end - start
                 if elapsed_api > 0.5:
