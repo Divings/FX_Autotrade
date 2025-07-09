@@ -1627,11 +1627,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         range_value = calculate_range(price_buffer, period=10)
         
         if range_value != None:
-            if adx >= 20 and range_value >= 0.1:
+            if adx >= 20 and range_value >= 0.05:
                 if nn_nonce == 0:
                     notify_slack(f"[横ばい判定] 価格が動き始めました")
                     logging.info("[スキップ] 価格が動き始め")
                     nn_nonce = 1
+                    shared_state["cooldown_untils"] = time.time() + MAX_Stop
             else:
                 trend = None
                 nn_nonce = 0
@@ -1730,6 +1731,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if direction == "SELL" and rsi <= 30:
                     rsi_ok = False
                 
+                if is_high_volatility(close_prices) == False:
+                    msg = f"[スキップ] {trend} ボラティリティ低のためエントリースキップ"
+                    logging.info(msg)
+                    notify_slack(msg)
+                    continue
+
                 if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
