@@ -1571,8 +1571,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     close_order(pid, size, reverse_side(side))
                     record_result(profit, shared_state)
                     del max_profits[pid]
-                    continue  # 他の建玉も見る
-        
+                            
         if positions:
             bid = prices["bid"]
             ask = prices["ask"]
