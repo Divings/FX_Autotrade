@@ -1615,7 +1615,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         macd_cross_down = macd[-2] >= signal[-2] and macd[-1] < signal[-1]
 
         macd_bullish = macd[-1] > signal[-1]  # クロスしてる or 継続中    
-        macd_bearish = macd[-1] < signal[-1]  # デッドクロスまたは継続中
+        #macd_bearish = macd[-1] < signal[-1]  # デッドクロスまたは継続中
 
         if adx is not None:
             if adx < 20:
@@ -1658,7 +1658,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     close_order(pid, size, reverse_side(side))
                     record_result(profit, shared_state)
                     del max_profits[pid]
-                    
+
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
 
