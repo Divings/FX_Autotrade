@@ -1358,6 +1358,55 @@ def dynamic_filter(adx, rsi, bid, ask):
 
     return True
 
+
+def Traring_Stop(adx,max_profits):
+    if adx is not None:
+        if adx < 20:
+            TRAILING_STOP = 10
+        elif adx < 40:
+            TRAILING_STOP = 15
+        else:
+            TRAILING_STOP = 25
+    else:
+        TRAILING_STOP = 15
+            
+    positions = get_positions()
+    if positions:
+        prices = get_price()
+        ask = prices["ask"]
+        bid = prices["bid"]
+
+        for pos in positions:
+            pid = pos["positionId"]
+            side = pos.get("side", "BUY").upper()
+            entry = float(pos["price"])
+            size = int(pos["size"])
+            elapsed = time.time() - shared_state.get("entry_time", time.time())
+        
+        prices = get_price()
+        ask = prices["ask"]
+        bid = prices["bid"]
+        
+        # 現在利益の計算
+        profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
+
+        # 最大利益の更新
+        if pid not in max_profits:
+            max_profits[pid] = profit
+        elif profit > max_profits[pid]:
+            max_profits[pid] = profit
+        if profit > 0:
+            logging.info(f"[トレール更新] 建玉{pid} 現在の最大利益更新: {profit}円")
+
+            # トレーリングストップ判定
+        if profit <= max_profits[pid] - TRAILING_STOP:
+            notify_slack(f"[トレーリングストップ] 建玉{pid} 最大利益{max_profits[pid]}円 → 利益確保して決済")
+            close_order(pid, size, reverse_side(side))
+            record_result(profit, shared_state)
+            # 削除する前に確認
+            if pid in max_profits:
+                del max_profits[pid]
+
 candle_buffer = []
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
@@ -1616,54 +1665,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         macd_bullish = macd[-1] > signal[-1]  # クロスしてる or 継続中    
         #macd_bearish = macd[-1] < signal[-1]  # デッドクロスまたは継続中
-
-        if adx is not None:
-            if adx < 20:
-                TRAILING_STOP = 10
-            elif adx < 40:
-                TRAILING_STOP = 15
-            else:
-                TRAILING_STOP = 25
-        else:
-            TRAILING_STOP = 15
-            
-        positions = get_positions()
-        if positions:
-            prices = get_price()
-            ask = prices["ask"]
-            bid = prices["bid"]
-
-            for pos in positions:
-                pid = pos["positionId"]
-                side = pos.get("side", "BUY").upper()
-                entry = float(pos["price"])
-                size = int(pos["size"])
-                elapsed = time.time() - shared_state.get("entry_time", time.time())
-        
-                prices = get_price()
-                ask = prices["ask"]
-                bid = prices["bid"]
-        
-                # 現在利益の計算
-                profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
-
-                # 最大利益の更新
-                if pid not in max_profits:
-                    max_profits[pid] = profit
-                elif profit > max_profits[pid]:
-                    max_profits[pid] = profit
-                if profit > 0:
-                    logging.info(f"[トレール更新] 建玉{pid} 現在の最大利益更新: {profit}円")
-
-                # トレーリングストップ判定
-                if profit <= max_profits[pid] - TRAILING_STOP:
-                    notify_slack(f"[トレーリングストップ] 建玉{pid} 最大利益{max_profits[pid]}円 → 利益確保して決済")
-                    close_order(pid, size, reverse_side(side))
-                    record_result(profit, shared_state)
-                    # 削除する前に確認
-                    if pid in max_profits:
-                        del max_profits[pid]
-
+        try:
+            Traring_Stop(adx,max_profits)
+        except Exception as e:
+            notify_slack("トレーリングストップでエラー")
+            with open("Error.log", "w", encoding="utf-8") as f:
+                f.write(str(e))
+    
         macd_str = f"{macd[-1]:.5f}" if macd[-1] is not None else "None"
         signal_str = f"{signal[-1]:.5f}" if signal[-1] is not None else "None"
 
