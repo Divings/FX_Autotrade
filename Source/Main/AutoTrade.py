@@ -1266,7 +1266,7 @@ def failSafe():
             close_side = "SELL" if side == "BUY" else "BUY"
             close_order(pid,size_str,close_side)
             bid = prices["bid"]
-            write_log("LOSS_CUT", bid)
+            write_log("Fail_Safe", bid)
     else:
         print("強制決済建玉なし")
         return 0
@@ -1551,6 +1551,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
 
         now = datetime.now()
+        if  now.weekday() == 5 and now.hour >= 5:
+            failSafe() # 取引中に市場が止まる前に決済
+
         if USD_TIME == 1:
             if now.hour >= 6 and now.hour <= 16:
                 if not shared_state.get("vstop_active", False):                   
