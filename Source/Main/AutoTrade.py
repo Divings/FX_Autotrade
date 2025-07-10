@@ -1409,6 +1409,8 @@ def Traring_Stop(adx,max_profits):
             if pid in max_profits:
                 del max_profits[pid]
 
+first_start = True
+
 candle_buffer = []
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
@@ -1418,6 +1420,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     from datetime import date
     import time
     import logging
+    global first_start
     global candle_buffer
     global price_buffer
     # price_buffer = deque(maxlen=240)
@@ -1675,7 +1678,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     notify_slack(f"[横ばい判定] 価格が動き始めました")
                     logging.info("[スキップ] 価格が動き始め")
                     nn_nonce = 1
-                    shared_state["cooldown_untils"] = time.time() + MAX_Stop
+                    if first_start != True:
+                        shared_state["cooldown_untils"] = time.time() + MAX_Stop
+                    else:
+                        first_start = False
+                        
             else:
                 trend = None
                 nn_nonce = 0
