@@ -192,9 +192,7 @@ def download_two_files(base_url, download_dir):
         
         with open(download_path, 'wb') as f:
             shutil.copyfileobj(response.raw, f)
-        
-        # print(f"Downloaded {filename} to {download_path}")
-        
+                
 import os
 import shutil
 import requests
@@ -912,7 +910,6 @@ def notify_asset():
 public_key_path = os.path.join(key_box, "publickey.asc")
 download_public_key(PUBLIC_KEY_URL, public_key_path)
 import_public_key(key_box, public_key_path)
-# verify_signature(key_box, "EncryptSecureDEC.py.sig", "EncryptSecureDEC.py")
 
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
@@ -1189,7 +1186,7 @@ def close_order(position_id, size, side):
 
         # 成功応答かチェック
         if res.status_code == 200 and "data" in data:
-            # price = data["data"].get("price", "取得不可")
+            
             notify_slack(f"[決済] 成功: {side}")
             fee_test(side)
             if rootOrderIds != None:
@@ -1241,7 +1238,7 @@ def first_order(trend,shared_state=None):
                         write_info(rootOrderIds,temp_dir)
                 else:
                     rootOrderIds = None
-                    # notify_slack("[エラー] 注文のrootOrderIdが取得できませんでした")
+
                 shared_state["entry_time"] = time.time()
                 write_log(trend, ask)
                 return 1
@@ -1300,10 +1297,6 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candle
     shared_state["trend_start_time"] = datetime.datetime.now()
     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
 
-    #candles = build_last_2_candles_from_prices(list(price_buffer))
-    #if len(price_buffer) < 40:
-    #    logging.info("価格履歴がまだ不足しているので待機")
-    #    return
     if not candles or len(candles) < 2:
         logging.info(candles)
         logging.error("ローソク足データが不足しているためスキップ")
@@ -1551,7 +1544,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend_init_notice"] = True
             await asyncio.sleep(interval_sec)
             continue
-        
+
         now = datetime.now()
         if USD_TIME == 1:
             if now.hour >= 6 and now.hour <= 16:
@@ -1654,7 +1647,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         macd_cross_down = macd[-2] >= signal[-2] and macd[-1] < signal[-1]
 
         macd_bullish = macd[-1] > signal[-1]  # クロスしてる or 継続中    
-        #macd_bearish = macd[-1] < signal[-1]  # デッドクロスまたは継続中
+        # macd_bearish = macd[-1] < signal[-1]  # デッドクロスまたは継続中
         try:
             Traring_Stop(adx,max_profits)
         except Exception as e:
@@ -1670,9 +1663,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[判定詳細] trend候補={trend}, diff={diff:.5f}, stdev={statistics.stdev(list(price_buffer)[-5:]):.5f}")
         
         candles = build_last_2_candles_from_prices(list(price_buffer))
-        #candles = candle_buffer[-1:] + candles
-        # if len(candle_buffer) > 50:
-        #    candle_buffer=candle_buffer[-50]
         logging.info(f"[INFO] キャンドルデータ2本分 {candles}")
         range_value = calculate_range(price_buffer, period=10)
         
@@ -1762,7 +1752,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         short_stdev = statistics.stdev(list(price_buffer)[-5:])
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
-        
         
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
