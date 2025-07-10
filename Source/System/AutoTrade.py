@@ -1552,6 +1552,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             await asyncio.sleep(interval_sec)
             continue
         
+        now = datetime.now()
         if USD_TIME == 1:
             if now.hour >= 6 and now.hour <= 16:
                 if not shared_state.get("vstop_active", False):                   
