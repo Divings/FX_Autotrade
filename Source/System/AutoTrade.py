@@ -41,7 +41,7 @@ from Assets import assets
 # ミッドナイトモード(Trueで有効化)
 night = True
 MAX_Stop = 180
-SYS_VER = "3.5.6"
+SYS_VER = "15.0.0"
 
 import numpy as np
 
@@ -726,6 +726,11 @@ TIME_STOP = config["TIME_STOP"]
 MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 USD_TIME = config["USD_TIME"]
+
+def is_night_time():
+    now = datetime.now().hour
+    return (16 <= now <= 23) or (0 <= now <= 2)
+
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     # deque, list, tuple のいずれかか確認
@@ -1431,7 +1436,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     last_notified = {}  # 建玉ごとの通知済みprofit記録
     max_profits = {}    # 建玉ごとの最大利益記録
     TRAILING_STOP = 15
-    
+    global VOL_THRESHOLD
     last_rsi_state = None
     last_adx_state = None
     sstop = 0
@@ -1753,6 +1758,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         short_stdev = statistics.stdev(list(price_buffer)[-5:])
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
         
+        if is_night_time():
+            VOL_THRESHOLD = 0.01  # 夜は基準をゆるくする
+        else:
+            VOL_THRESHOLD = 0.03
+        
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
@@ -1796,15 +1806,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend"] = None
                 await asyncio.sleep(interval_sec)
                 continue
-            
-            TREND_HOLD_MINUTES = 15  # 任意の継続時間
-
             now = datetime.now()
             adjust_max_loss(close_prices)
             trend_active = False
             if is_volatile(close_prices, candles):
                 notify_slack("[フィルター] 乱高下中につき判定スキップ")
                 continue  # トレンド判定処理を一時スキップ
+            
             # ここにDMI判定を追加する
             plus_di, minus_di = calculate_dmi(high_prices, low_prices, close_prices)
             current_plus_di = plus_di[-1]
@@ -1816,38 +1824,18 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 dmi_trend_match = True
             elif trend == "SELL" and current_minus_di > current_plus_di:
                 dmi_trend_match = True
-            
+                      
             logging.info(f"[INFO] DMI TREND {dmi_trend_match}")
 
-            if "trend_start_time" in shared_state:
-                elapsed = (now - shared_state["trend_start_time"]).total_seconds() / 60.0
-                if elapsed < TREND_HOLD_MINUTES:
-                    trend_active = True
-                    if trend != None:
-                        logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
-            stc = dynamic_filter(adx, rsi, bid, ask)
-            if stc and trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi_limit and dmi_trend_match:
-                if is_high_volatility(close_prices):
-                    msg = f"[スキップ] {trend} ボラティリティ高のためエントリースキップ"
-                    logging.info(msg)
-                    notify_slack(msg)
-                    continue  # エントリーしない
-                await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles)
-            elif stc and trend == "SELL" and (macd_cross_down) and sma_cross_down and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
-                if is_high_volatility(close_prices):
-                    msg = f"[スキップ] {trend} ボラティリティ高のためエントリースキップ"
-                    logging.info(msg)
-                    notify_slack(msg)
-                    continue  # エントリーしない
-                await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str,candles)
-            elif positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
-                notify_slack(f"[トレンド] トレンド反転 即時損切り")
+            if positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
+                
                 positions = get_positions()
                 prices = get_price()
                 if prices is None:
                     await asyncio.sleep(interval_sec)
                     continue
                 if positions:
+                    notify_slack(f"[トレンド] トレンド反転 即時損切り")
                     ask = prices["ask"]
                     bid = prices["bid"]
 
@@ -1868,6 +1856,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     await asyncio.sleep(interval_sec)
                     continue
                 if positions:
+                    notify_slack(f"[トレンド] トレンド反転 即時損切り")
                     ask = prices["ask"]
                     bid = prices["bid"]
 
@@ -1879,53 +1868,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         close_side = "SELL" if side == "BUY" else "BUY"
                     close_order(pid, size_str, close_side)
                     write_log(close_side, bid)
-            else:
-                    shared_state["trend"] = None
-
-                    ng_reasons = []
-                    if trend == "BUY":
-                        macd_ok = (macd_bullish or macd_cross_up)
-                        sma_ok = sma_cross_up
-                        rsi_ok = (rsi < 70)
-                        dmi_ok = dmi_trend_match
-                        stdev_ok = True  # BUY側はstdev条件なし
-
-                    elif trend == "SELL":
-                        macd_ok = macd_cross_down
-                        sma_ok = sma_cross_down
-                        rsi_ok = (rsi > 35)
-                        dmi_ok = dmi_trend_match
-                        stdev_ok = (short_stdev >= 0.007 and long_stdev >= 0.010)
-
-                    if not macd_ok:
-                        ng_reasons.append("MACD")
-                    if not sma_ok:
-                        ng_reasons.append("SMA")
-                    if not rsi_ok:
-                        ng_reasons.append("RSI")
-                    if not dmi_ok:
-                        ng_reasons.append("DMI")
-                    if trend == "SELL" and not stdev_ok:
-                        ng_reasons.append("ボラ")
-                    if ng_reasons:
-                        notify_message = f"[スキップ] {trend}側 条件未達: {', '.join(ng_reasons)}"
-    
-                        # SHA256計算
-                        hash_digest = hashlib.sha256(notify_message.encode()).hexdigest()
-    
-                        if hash_digest != shared_state.get("last_skip_hash"):
-                            notify_slack(notify_message)
-                            shared_state["last_skip_hash"] = hash_digest
-                        else:
-                            logging.info("[スキップ] 同一理由でスキップ → 通知抑制")
-    
-                        shared_state["trend"] = None
-                    else:
-                        shared_state["last_skip_hash"] = None  # エントリー成功時はリセット
-                        notify_slack(f"[スキップ] {trend}側 条件未達: {', '.join(ng_reasons)}")
-        else:
-            if  (trend is not None) and trend != "BUY" and trend != "SELL":
-                notify_slack(f"[スキップ] trend未定義（不明な分岐）{trend}")
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         
         if shared_state.get("cmd") == "save_adx":
