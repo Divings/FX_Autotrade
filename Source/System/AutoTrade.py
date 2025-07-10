@@ -489,7 +489,8 @@ DEFAULT_CONFIG = {
     "TIME_STOP":22,
     "MACD_DIFF_THRESHOLD":0.002,
     "SKIP_MODE":0,
-    "SYMBOL":"USD_JPY"
+    "SYMBOL":"USD_JPY",
+    "USD_TIME":0
 }
 
 macd_valid = False
@@ -726,6 +727,7 @@ VOL_THRESHOLD = config["VOL_THRESHOLD"]
 TIME_STOP = config["TIME_STOP"]
 MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
+USD_TIME = config["USD_TIME"]
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     # deque, list, tuple のいずれかか確認
@@ -1504,13 +1506,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 s = 1
             if s == 1 and now.hour !=6:
                 s = 0
-        if night != True:
-            midnight = False
-            if now.hour >= TIME_STOP or now.hour < 5:
-                midnight = False
+        
+        if USD_TIME == 1:
+            if now.hour >= 6 and now.hour <= 16:
                 if not shared_state.get("vstop_active", False):                   
-                    notify_slack(f"[クールダウン] {str(TIME_STOP)}時以降のため自動売買スキップ")
-                    logging.info(f"[時間制限] {str(TIME_STOP)}時以降の取引スキップ")
+                    notify_slack(f"[クールダウン] 東京市場のため自動売買スキップ")
+                    logging.info(f"[時間制限] 東京市場のため取引スキップ")
                     shared_state["vstop_active"] = True
                     shared_state["forced_entry_date"] = False
                     if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
@@ -1521,24 +1522,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 continue
             else:
                 shared_state["vstop_active"] = False
-        else:
-            now = datetime.now()
-            if now.hour <= 4:
-                # 誤差吸収のため値を初期化
-                high_prices.clear()
-                low_prices.clear()
-                close_prices.clear()
-                price_buffer.clear()
-                shared_state["price_reset_done"] = True 
-            if now.hour >= 21:
-                midnight = True
-                m = 0
-            elif now.hour >= 4:
-                midnight = False
-                m = 1
-            if m == 0 and midnight==False:
-                notify_slack(f"[INFO]ミッドナイトモードが有効です。\n 夜間取引を行います、市場の状況により大きな損失が発生する場合があります。")
-                m = 1
 
         from datetime import datetime, timezone
 
@@ -1714,14 +1697,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 await asyncio.sleep(interval_sec)
                 continue
         
-        if midnight == True and adx < 50:
-            if m_note == 0 and now.hour >= 21:
-                notify_slack(f"[INFO] ミッドナイトモード中だが、ADXが低いのでスキップ ADX={adx_str}")
-                m_note = 1
-            continue
-        else:
-            m_note = 0
-
         today_str = datetime.now().strftime("%Y-%m-%d")
         if adx >= 95:
             # 無効化（非常事態）
