@@ -1360,7 +1360,6 @@ def dynamic_filter(adx, rsi, bid, ask):
 
     return True
 
-
 def Traring_Stop(adx,max_profits):
     if adx is not None:
         if adx < 20:
@@ -1510,22 +1509,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             if s == 1 and now.hour !=6:
                 s = 0
         
-        if USD_TIME == 1:
-            if now.hour >= 6 and now.hour <= 16:
-                if not shared_state.get("vstop_active", False):                   
-                    notify_slack(f"[クールダウン] 東京市場のため自動売買スキップ")
-                    logging.info(f"[時間制限] 東京市場のため取引スキップ")
-                    shared_state["vstop_active"] = True
-                    shared_state["forced_entry_date"] = False
-                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
-                        pass
-                    else:
-                        save_price_history(high_prices, low_prices, close_prices)
-                await asyncio.sleep(interval_sec)
-                continue
-            else:
-                shared_state["vstop_active"] = False
-
         from datetime import datetime, timezone
 
         now =  datetime.now(timezone.utc)
@@ -1564,6 +1547,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend_init_notice"] = True
             await asyncio.sleep(interval_sec)
             continue
+        
+        if USD_TIME == 1:
+            if now.hour >= 6 and now.hour <= 16:
+                if not shared_state.get("vstop_active", False):                   
+                    notify_slack(f"[クールダウン] 東京市場のため自動売買スキップ")
+                    logging.info(f"[時間制限] 東京市場のため取引スキップ")
+                    shared_state["vstop_active"] = True
+                    shared_state["forced_entry_date"] = False
+                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
+                        pass
+                    else:
+                        save_price_history(high_prices, low_prices, close_prices)
+                await asyncio.sleep(interval_sec)
+                continue
+            else:
+                shared_state["vstop_active"] = False
 
         spread = ask - bid
         if spread > MAX_SPREAD:
