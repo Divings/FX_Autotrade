@@ -1410,6 +1410,10 @@ def Traring_Stop(adx,max_profits):
 
 first_start = True
 
+
+if USD_TIME == 1:
+    if now.hour >= 6 and now.hour <= 16:                   
+        logging.info(f"[時間制限] 東京市場のため取引スキップ")
 candle_buffer = []
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
