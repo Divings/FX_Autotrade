@@ -420,9 +420,9 @@ LOG_FILE1 = f"{temp_dir}/fx_debug_log.txt"
 try:
     _log_last_reset = datetime.now()
 except:
-    _log_last_reset = datetime.datetime.now()
+    _log_last_reset = datetime.now()
 os.makedirs("last_temp", exist_ok=True)
-now = datetime.datetime.now()
+now = datetime.now()
 
 # フォーマット
 formatted = now.strftime("%Y/%m/%d %H:%M")
@@ -1215,7 +1215,7 @@ def close_order(position_id, size, side):
         return None
 
 def first_order(trend,shared_state=None):
-    # now = datetime.datetime.now()
+    # now = datetime.now()
     global rootOrderIds
     positions = get_positions()
     prices = get_price()
@@ -1298,7 +1298,7 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
 async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles):
     shared_state["trend"] = trend
-    shared_state["trend_start_time"] = datetime.datetime.now()
+    shared_state["trend_start_time"] = datetime.now()
     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
 
     if not candles or len(candles) < 2:
@@ -1325,7 +1325,7 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candle
         logging.info(f"[エントリー判定] {trend} トレンド確定")
 
 def dynamic_filter(adx, rsi, bid, ask):
-    now = datetime.datetime.now()
+    now = datetime.now()
     hour = now.hour
 
     # スプレッドの計算
