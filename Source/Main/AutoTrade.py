@@ -199,7 +199,6 @@ import requests
 import lzma
 import hashlib
 import json
-import datetime
 import getpass
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import PBKDF2
