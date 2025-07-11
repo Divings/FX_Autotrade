@@ -1462,7 +1462,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         today = datetime.now()
         weekday_number = today.weekday()
         status_market = is_market_open()
-        if status_market != "OPEN" or weekday_number == 6 or weekday_number == 5:
+        if status_market != "OPEN" and (weekday_number in (5, 6) or (weekday_number == 0 and today.hour >= 5)):
             if sstop == 0:
                 notify_slack(f"[市場] 市場が{status_market}中")
                 logging.info("[市場] 市場が閉場中")
