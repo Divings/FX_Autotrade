@@ -933,8 +933,6 @@ def is_market_open():
 
 # === 現在価格取得 ===
 def get_price():
-    if is_market_open()!="OPEN":
-        return None
     try:
         res = requests.get(f"{FOREX_PUBLIC_API}/v1/ticker")
         res.raise_for_status()
@@ -1466,7 +1464,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         weekday_number = today.weekday()
         status_market = is_market_open()
         
-        if status_market != "OPEN" and (weekday_number in (5, 6) or (weekday_number == 0 and today.hour >= 5)):
+        if status_market != "OPEN":
             if sstop == 0:
                 notify_slack(f"[市場] 市場が{status_market}中")
                 logging.info("[市場] 市場が閉場中")

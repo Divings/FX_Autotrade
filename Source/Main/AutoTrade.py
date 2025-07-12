@@ -933,8 +933,6 @@ def is_market_open():
 
 # === 現在価格取得 ===
 def get_price():
-    if is_market_open()!="OPEN":
-        return None
     try:
         res = requests.get(f"{FOREX_PUBLIC_API}/v1/ticker")
         res.raise_for_status()
