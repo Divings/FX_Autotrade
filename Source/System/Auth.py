@@ -20,7 +20,7 @@ def download_public_key(url, save_path):
             f.write(response.content)
         # print("公開鍵をダウンロードしました")
     except Exception as e:
-        notify_slack(f"公開鍵ダウンロード失敗: {str(e)}")
+        #notify_slack(f"公開鍵ダウンロード失敗: {str(e)}")
         sys.exit(1)
 
 def import_public_key(gpg_home, key_path):
@@ -29,7 +29,7 @@ def import_public_key(gpg_home, key_path):
         subprocess.run(['gpg', '--homedir', gpg_home, '--import', key_path], check=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         # print("公開鍵をインポートしました")
     except subprocess.CalledProcessError:
-        notify_slack("公開鍵インポート失敗")
+        # notify_slack("公開鍵インポート失敗")
         sys.exit(1)
 
 def verify_signature(gpg_home, signature_file, update_file):
@@ -43,11 +43,13 @@ def verify_signature(gpg_home, signature_file, update_file):
         print(result.stdout)
         print(result.stderr)
         return 1
-    notify_slack("[INFO] 署名検証成功")
+    # notify_slack("[INFO] 署名検証成功")
     return 0
 
 public_key_path = os.path.join(temp_dir, "publickey.asc")
 download_public_key(PUBLIC_KEY_URL, public_key_path)
 import_public_key(temp_dir, public_key_path)
 out = verify_signature(temp_dir, SIGNATURE_FILE, UPDATE_FILE)
+if out == 0:
+    notify_slack("[INFO] 署名検証成功")
 sys.exit(out)
