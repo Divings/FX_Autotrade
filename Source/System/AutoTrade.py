@@ -918,8 +918,23 @@ import_public_key(key_box, public_key_path)
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
 
+# === 営業状態チェック ===
+def is_market_open():
+    try:
+        response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
+        response.raise_for_status()
+        status = response.json().get("data", {}).get("status")
+        # notify_slack(f"[市場] ステータス: {status}")
+        return status
+    except Exception as e:
+        logging.error(f"[市場] 状態取得失敗: {e}")
+        return False
+
+
 # === 現在価格取得 ===
 def get_price():
+    if is_market_open()!="OPEN":
+        return None
     try:
         res = requests.get(f"{FOREX_PUBLIC_API}/v1/ticker")
         res.raise_for_status()
@@ -989,18 +1004,6 @@ macd_valid = False
 def create_signature(timestamp, method, path, body=""):
     message = timestamp + method + path + body
     return hmac.new(API_SECRET.encode(), message.encode(), hashlib.sha256).hexdigest()
-
-# === 営業状態チェック ===
-def is_market_open():
-    try:
-        response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
-        response.raise_for_status()
-        status = response.json().get("data", {}).get("status")
-        # notify_slack(f"[市場] ステータス: {status}")
-        return status
-    except Exception as e:
-        logging.error(f"[市場] 状態取得失敗: {e}")
-        return False
 
 # === 建玉取得 ===
 def get_positions():
@@ -1462,6 +1465,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         today = datetime.now()
         weekday_number = today.weekday()
         status_market = is_market_open()
+        
         if status_market != "OPEN" and (weekday_number in (5, 6) or (weekday_number == 0 and today.hour >= 5)):
             if sstop == 0:
                 notify_slack(f"[市場] 市場が{status_market}中")
@@ -1486,7 +1490,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             shared_state["notified_cooldown"] = False
-
+        
         prices = get_price()
         now = datetime.now()
         if now.hour == 0 and now.minute == 0:
