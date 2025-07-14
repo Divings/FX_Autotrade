@@ -852,6 +852,8 @@ def last_balance():
         logging.info("データ挿入成功")
     else:
         logging.error("データ挿入失敗")
+        with open("Error.log", "w", encoding="utf-8") as f:
+            f.write(available_amounts)
 
     with open("pricesData.txt", "w", encoding="utf-8") as f:
         f.write(available_amounts)
@@ -1500,13 +1502,16 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         elif last == 1:
             last = 0
             
-        if now.hour < 4:
+        if now.hour == 18 and now.minute == 30 and shared_state.get("price_reset_done") != True:
             high_prices.clear()
             low_prices.clear()
             close_prices.clear()
             price_buffer.clear()
             m = 0
             shared_state["price_reset_done"] = True 
+        else:
+            shared_state["price_reset_done"] = False
+
         if now.hour == 6:
             if s == 0:
                 notify_asset()
