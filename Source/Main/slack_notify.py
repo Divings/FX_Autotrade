@@ -28,14 +28,25 @@ SLACK_WEBHOOK_URL = config1["SLACK_WEBHOOK_URL"]
 # 通知制限管理辞書（メッセージ: 最後に送信した時刻）
 _last_notify_times = {}
 _NOTIFY_COOLDOWN_SECONDS = 60  # 同じ内容は60秒間送らない
+import hashlib
+import copy
 
 Buffers = None
+msg_history = None
 def notify_slack(message: str):
+    global msg_history
     if not SLACK_WEBHOOK_URL:
         raise ValueError("SLACK_WEBHOOK_URL is not set.")
     
     now = time.time()
     last_sent = _last_notify_times.get(message)
+    msg_hash=hashlib.sha256(message.encode()).hexdigest()
+    if msg_hash==msg_history:
+        log_message = f"[Slack通知制限] メッセージ送信抑制: {message}（{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))}）\n"
+        with open("notification_log.txt", "a", encoding="utf-8") as f:
+            f.write(log_message)
+        return
+    
     if last_sent and (now - last_sent < _NOTIFY_COOLDOWN_SECONDS):
         log_message = f"[Slack通知制限] メッセージ送信抑制: {message}（{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))}）\n"
         with open("notification_log.txt", "a", encoding="utf-8") as f:
@@ -73,5 +84,6 @@ def notify_slack(message: str):
         response = requests.post(SLACK_WEBHOOK_URL, json=payload)
         if response.status_code != 200:
             print(f"[Slack通知失敗] {response.status_code} - {response.text}")
+        msg_history = msg_hash
     except Exception as e:
         print(f"[Slack通知例外] {e}")
