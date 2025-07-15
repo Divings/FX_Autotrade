@@ -1770,7 +1770,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
         
         if is_night_time() or USD_TIME == 1:
-            VOL_THRESHOLD = 0.01  # 夜は基準をゆるくする
+            VOL_THRESHOLD = 0.007  # 夜は基準をゆるくする
         else:
             VOL_THRESHOLD = 0.03
         
