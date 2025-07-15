@@ -751,8 +751,8 @@ _PREV_MAX_LOSS = None
 
 def adjust_max_loss(prices,
                     base_loss=50,
-                    vol_thresholds=(0.03, 0.05),
-                    adjustments=(5, 10),
+                    vol_thresholds=(0.005, 0.01),
+                    adjustments=(-5, 10),
                     period=5):
     """
     ボラティリティに応じて MAX_LOSS を調整してグローバルに設定
