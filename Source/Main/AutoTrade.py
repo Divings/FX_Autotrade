@@ -684,6 +684,9 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             #mid = (ask + bid) / 2
 
             spread = ask - bid
+            if spread > MAX_SPREAD:
+                notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
+                continue
             
             if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
                 if spread > MAX_SPREAD:
@@ -1231,7 +1234,7 @@ def first_order(trend,shared_state=None):
     ask = prices["ask"]
     spread = ask - bid
     if spread > MAX_SPREAD:
-        notify_slack(f"[警告] スプレッドに差が許容範囲外なので取引中止")
+        notify_slack(f"[警告] スプレッドの差が許容範囲外なので取引中止")
         return 3
     if not positions:
         if trend is None:
@@ -2094,6 +2097,7 @@ async def auto_trade():
             await quick_profit_task
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_quick_profit タスク終了")
+
 if __name__ == "__main__":
     
     # import_public_key(key_box, public_key_path)
