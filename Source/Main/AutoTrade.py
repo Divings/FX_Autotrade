@@ -40,7 +40,6 @@ from Assets import assets
 
 # ミッドナイトモード(Trueで有効化)
 night = True
-MAX_Stop = 180
 SYS_VER = "15.0.0"
 
 import numpy as np
@@ -487,7 +486,8 @@ DEFAULT_CONFIG = {
     "MACD_DIFF_THRESHOLD":0.002,
     "SKIP_MODE":0,
     "SYMBOL":"USD_JPY",
-    "USD_TIME":0
+    "USD_TIME":0,
+    "MAX_Stop":30
 }
 
 macd_valid = False
@@ -725,11 +725,11 @@ TIME_STOP = config["TIME_STOP"]
 MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 USD_TIME = config["USD_TIME"]
+MAX_Stop = config["MAX_Stop"]
 
 def is_night_time():
     now = datetime.now().hour
     return (16 <= now <= 23) or (0 <= now <= 2)
-
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     # deque, list, tuple のいずれかか確認
@@ -1522,14 +1522,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         from datetime import datetime, timezone
 
         now =  datetime.now(timezone.utc)
-
-        # 日本時間（UTC+9）に換算
-        hour_jst = (now.hour + 9) % 24
-
-        if 9 <= hour_jst <= 22:
-            MAX_SPREAD = 0.03  # 日中は今のまま
-        else:
-            MAX_SPREAD = 0.007  # 夜間は厳しめ
 
         if not prices:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
