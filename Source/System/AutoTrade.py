@@ -482,6 +482,7 @@ notify_slack("自動売買システム起動")
 
 # == 記録済みデータ読み込み ===
 shared_state = load_state()
+reset_notifications(shared_state)
 if shared_state.get("cmd") == "save_adx":
     shared_state["cmd"] == None
 
