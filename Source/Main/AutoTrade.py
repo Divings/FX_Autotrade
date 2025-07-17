@@ -329,6 +329,23 @@ shared_state = {
     "trail_offset":20
 }
 
+# 通知系のキーを初期化
+def reset_notifications(shared_state: dict):
+    keys_to_reset = {
+        "trend_init_notice": False,
+        "margin_alert_sent": False,
+        "adx_wait_notice": False,
+        "rsi_adx_none_notice": False,
+        "last_skip_notice": None,
+        "last_margin_notify": None,
+        "last_skip_hash": None,
+    }
+
+    for key, value in keys_to_reset.items():
+        shared_state[key] = value
+
+reset_notifications(shared_state)
+
 import configparser
 def load_ini():
     try:
