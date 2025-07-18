@@ -620,7 +620,7 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             if elapsed > MAX_HOLD:
-                if shared_state.get("firsts")==True:
+                if shared_state.get("firsts")==True and USD_TIME==1:
                     logging.info("延長 保有時間超過だが初動検知のためスキップ")
                     return
                 if profit > EXTENDABLE_LOSS and shared_state.get("trend") == side:
