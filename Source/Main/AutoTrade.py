@@ -42,6 +42,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 
+events_df = pd.DataFrame(columns=["datetime", "impact_level", "event"])
 skip_until = None
 
 SKIP_MINUTES = {
@@ -877,6 +878,43 @@ def adjust_max_loss(prices,
         notify_slack(msg)
         _PREV_MAX_LOSS = MAX_LOSS
 
+
+import asyncio
+
+async def schedule_fetch_events():
+    """
+    0:00に一度だけ指標を取得するループ
+    """
+    global events_df
+    while True:
+        now = datetime.now()
+        if now.hour == 0 and now.minute == 0:
+            print(f"[{now}] 指標リストを更新します")
+            events_df = fetch_usdjpy_economic_events()
+            print(events_df)
+            await asyncio.sleep(60)  # 1分待機してから次のループ
+        await asyncio.sleep(10)
+
+def is_event_active():
+    """
+    今が指標時間帯かどうか判定する
+    """
+    global events_df
+    now = datetime.now()
+    window_start = now - timedelta(minutes=10)
+    window_end = now + timedelta(minutes=10)
+
+    if not events_df.empty:
+        nearby = events_df[
+            (events_df["datetime"] >= window_start) &
+            (events_df["datetime"] <= window_end)
+        ]
+        if not nearby.empty:
+            for _, row in nearby.iterrows():
+                logging.info(f"⚠ 指標時間帯検出！{row['event']} （{row['impact_level']}）")
+            return True
+    return False
+
 def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
     save_state(shared_state)
@@ -1533,6 +1571,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global VOL_THRESHOLD
     last_rsi_state = None
     last_adx_state = None
+    
     sstop = 0
     vstop = 0
     nstop = 0
@@ -1857,15 +1896,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             VOL_THRESHOLD = 0.03
         
         now = datetime.now()
-        if now.minute % 5 == 0:
-            events_df = fetch_usdjpy_economic_events()
-            if not events_df.empty:
-                # 現在時刻±10分以内のイベントを探す
-                window_start = now - timedelta(minutes=10)
-                window_end = now + timedelta(minutes=10)
-                for _, row in events_df.iterrows():
-                    if window_start <= row["datetime"] <= window_end:
-                        set_dynamic_skip(row["datetime"], row["impact_level"])
         if is_skip_active():
             logging.info("⚠ 指標スキップ中 → エントリー停止")
             continue  # または return
@@ -1915,7 +1945,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 await asyncio.sleep(interval_sec)
                 continue
             now = datetime.now()
-            adjust_max_loss(close_prices)
+            # adjust_max_loss(close_prices)
             trend_active = False
             if is_volatile(close_prices, candles):
                 notify_slack("[フィルター] 乱高下中につき判定スキップ")
@@ -2071,6 +2101,7 @@ async def auto_trade():
     trend_task = loop.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     loss_cut_task = loop.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quick_profit_task = loop.create_task(monitor_quick_profit(shared_state, stop_event))
+    monitor_s=loop.create_task(schedule_fetch_events())
     
     # エラー通知
     server_task.add_done_callback(lambda t: notify_slack(f"情報保存用サーバが終了しました: {t.exception()}"))
@@ -2082,7 +2113,8 @@ async def auto_trade():
         hold_status_task,
         trend_task,
         loss_cut_task,
-        quick_profit_task
+        quick_profit_task,
+        monitor_s,
         )
     try:
         while True:
