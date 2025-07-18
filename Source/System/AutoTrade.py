@@ -38,6 +38,75 @@ from Price import extract_price_from_response
 from logs import write_log
 from Assets import assets
 
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+
+skip_until = None
+
+SKIP_MINUTES = {
+    "高": 40,
+    "中": 20,
+    "低": 0,
+}
+
+def fetch_usdjpy_economic_events():
+    url = "https://jp.investing.com/economic-calendar/"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.content, "html.parser")
+
+    rows = soup.select("table.economicCalendarTable tbody tr")
+    events = []
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    for row in rows:
+        time_cell = row.find("td", class_="first left time")
+        if time_cell is None:
+            continue
+        time_str = time_cell.get_text(strip=True)
+        try:
+            dt = datetime.strptime(f"{today} {time_str}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        currency = row.find("td", class_="left flagCur noWrap").get_text(strip=True)
+        impact_html = row.find("td", class_="sentiment")
+        impact = impact_html.get_text(strip=True).count("牛")
+        event = row.find("td", class_="event").get_text(strip=True)
+
+        if currency not in ["USD", "JPY"]:
+            continue
+
+        events.append({
+            "datetime": dt,
+            "currency": currency,
+            "impact": impact,
+            "event": event
+        })
+
+    df = pd.DataFrame(events)
+    if not df.empty:
+        df["impact_level"] = df["impact"].map({3: "高", 2: "中", 1: "低", 0: "低"})
+        df = df[["datetime", "currency", "impact_level", "event"]]
+    return df
+
+def set_dynamic_skip(event_time, impact_level):
+    global skip_until
+    minutes = SKIP_MINUTES.get(impact_level, 0)
+    if minutes > 0:
+        skip_until = event_time + timedelta(minutes=minutes)
+        notify_slack(f"⚠ 指標スキップ開始: {event_time}〜{skip_until} ({impact_level})")
+
+def is_skip_active(now=None):
+    global skip_until
+    now = now or datetime.now()
+    if skip_until and now <= skip_until:
+        remaining = (skip_until - now).total_seconds() / 60
+        logging.info(f"⛔ スキップ中（あと {remaining:.1f} 分）")
+        return True
+    return False
+
 # ミッドナイトモード(Trueで有効化)
 night = True
 SYS_VER = "15.0.0"
@@ -1787,6 +1856,20 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             VOL_THRESHOLD = 0.03
         
+        now = datetime.now()
+        if now.minute % 5 == 0:
+            events_df = fetch_usdjpy_economic_events()
+            if not events_df.empty:
+                # 現在時刻±10分以内のイベントを探す
+                window_start = now - timedelta(minutes=10)
+                window_end = now + timedelta(minutes=10)
+                for _, row in events_df.iterrows():
+                    if window_start <= row["datetime"] <= window_end:
+                        set_dynamic_skip(row["datetime"], row["impact_level"])
+        if is_skip_active():
+            logging.info("⚠ 指標スキップ中 → エントリー停止")
+            continue  # または return
+
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
