@@ -1870,7 +1870,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.info("⚠ 指標スキップ中 → エントリー停止")
             continue  # または return
         else:
-            logging.debug("⚠ 指標予定なし")
+            logging.info("⚠ 指標発表予定なし")
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
