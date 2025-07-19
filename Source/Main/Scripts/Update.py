@@ -78,6 +78,71 @@ if v.lower()=="y":
     subprocess.run(f"git commit -a -m \"{message}\"")
     subprocess.run("git push https://github.com/Divings/FX_Autotrade.git")
     print(" コードをプッシュしました")
+    v=1
 else:
     print(" コードのプッシュをスキップしました\n 手動でプッシュしてください")
-input(" >> ")
+    v=0
+
+if v==0:
+    sys.exit()
+
+import mysql.connector
+import re
+from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
+import os
+
+# .env 読み込み
+load_dotenv(dotenv_path=script_dir / '.env')  # script_dir は既に定義済み
+
+db_host = os.getenv("DB_HOST")
+db_user = os.getenv("DB_USER")
+db_pass = os.getenv("DB_PASS")
+db_name = os.getenv("DB_NAME")
+
+# AutoTrade.py のパス
+autotrade_path = main_dir / "AutoTrade.py"
+
+# SYS_VER を読み取る関数
+def read_sys_ver(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            m = re.match(r"\s*SYS_VER\s*=\s*['\"](.*?)['\"]", line)
+            if m:
+                return m.group(1)
+    return None
+
+sys_ver = read_sys_ver(autotrade_path)
+
+if sys_ver:
+    print(f"AutoTrade.py SYS_VER: {sys_ver}")
+
+    # MySQL に書き込む
+    try:
+        conn = mysql.connector.connect(
+            host=db_host,
+            user=db_user,
+            password=db_pass,
+            database=db_name
+        )
+
+        c = conn.cursor()
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS sys_ver_log (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                version VARCHAR(255) NOT NULL,
+                timestamp DATETIME NOT NULL
+            )
+        """)
+        c.execute("""
+            INSERT INTO sys_ver_log (version, timestamp) VALUES (%s, %s)
+        """, (sys_ver, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        conn.commit()
+        conn.close()
+        print("SYS_VER を MySQL に記録しました。")
+
+    except mysql.connector.Error as err:
+        print(f"MySQL エラー: {err}")
+else:
+    print("SYS_VER が AutoTrade.py から見つかりませんでした。")
