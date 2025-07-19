@@ -83,7 +83,7 @@ else:
     print(" コードのプッシュをスキップしました\n 手動でプッシュしてください")
     v=0
 
-if v==0:
+if v==0 or v==1:
     sys.exit()
 
 import mysql.connector
