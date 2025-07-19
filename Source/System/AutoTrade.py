@@ -110,7 +110,7 @@ def is_skip_active(now=None):
 
 # ミッドナイトモード(Trueで有効化)
 night = True
-SYS_VER = "72.0.0"
+SYS_VER = "73.0.0"
 
 import numpy as np
 
