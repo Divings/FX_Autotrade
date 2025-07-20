@@ -51,6 +51,22 @@ SKIP_MINUTES = {
     "低": 0,
 }
 
+import sqlite3
+def load_api_settings_sqlite(db_path="api_settings.db"):
+    """
+    SQLite から API_KEY と API_SECRET を取得して返す
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, value FROM api_settings WHERE name IN ('API_KEY', 'API_SECRET')")
+    rows = dict(cursor.fetchall())
+    conn.close()
+
+    api_key = rows.get("API_KEY", "")
+    api_secret = rows.get("API_SECRET", "")
+
+    return api_key, api_secret
+
 def fetch_usdjpy_economic_events():
     url = "https://jp.investing.com/economic-calendar/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -813,7 +829,7 @@ else:
     config = load_config_from_mysql()
     load_config_status = "Mysql"
 print(load_config_status)
-
+    
 SYMBOL = config["SYMBOL"]
 LOT_SIZE = config["LOT_SIZE"]
 MAX_SPREAD = config["MAX_SPREAD"]
@@ -934,8 +950,14 @@ def handle_exit(signum, frame):
 # === 環境変数の読み込み ===
 conf=load_settings_from_db()
 URL_Auth = conf["URL"]
-api_data, secret_data=load_api(temp_dir)
 
+if os.path.exists("api_settings.db"):
+    api_data,secret_data = load_config_from_xml("api_settings.db")
+    print("APIデータソース:ローカルファイル")
+else:
+    api_data, secret_data=load_api(temp_dir)
+    print("APIデータソース:データベース")
+    
 API_KEY = api_data.strip()
 API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
