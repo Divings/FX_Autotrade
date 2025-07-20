@@ -802,8 +802,18 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
 
         await asyncio.sleep(interval_sec)
 
+from load_xml import load_config_from_xml
+
+import os
+if os.path.exists("bot_config.xml"):
+    config = load_config_from_xml()
+    load_config_status="xml"
+else:
 # === 設定読み込み ===
-config = load_config_from_mysql()
+    config = load_config_from_mysql()
+    load_config_status = "Mysql"
+print(load_config_status)
+
 SYMBOL = config["SYMBOL"]
 LOT_SIZE = config["LOT_SIZE"]
 MAX_SPREAD = config["MAX_SPREAD"]
