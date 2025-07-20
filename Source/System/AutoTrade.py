@@ -806,7 +806,7 @@ from load_xml import load_config_from_xml
 
 import os
 if os.path.exists("bot_config.xml"):
-    config = load_config_from_xml()
+    config = load_config_from_xml("bot_config.xml")
     load_config_status="xml"
 else:
 # === 設定読み込み ===
