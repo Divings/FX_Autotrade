@@ -1032,11 +1032,7 @@ import subprocess
 import sys
 
 # パラメータ設定
-if URL_Auth != "https://github.com/Divings/Public_Auto_Trade_pac/releases/download/Pubkey/":
-    PUBLIC_KEY_URL = URL_Auth + "key/publickey.asc"
-else:
-    PUBLIC_KEY_URL = URL_Auth + "publickey.asc"
-
+PUBLIC_KEY_URL = URL_Auth + "publickey.asc"
 PUBLIC_KEY_FILE = "/opt/gpg/publickey.asc"
 UPDATE_FILE = "AutoTrade.py"
 SIGNATURE_FILE = "AutoTrade.py.sig"
