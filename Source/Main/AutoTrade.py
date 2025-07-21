@@ -823,12 +823,12 @@ from load_xml import load_config_from_xml
 import os
 if os.path.exists("bot_config.xml"):
     config = load_config_from_xml("bot_config.xml")
-    load_config_status="xml"
+    load_config_status="設定ソース:xml"
 else:
 # === 設定読み込み ===
     config = load_config_from_mysql()
-    load_config_status = "Mysql"
-print(load_config_status)
+    load_config_status = "設定ソース:Mysql"
+#print(load_config_status)
     
 SYMBOL = config["SYMBOL"]
 LOT_SIZE = config["LOT_SIZE"]
@@ -953,11 +953,17 @@ URL_Auth = conf["URL"]
 
 if os.path.exists("api_settings.db"):
     api_data,secret_data = load_api_settings_sqlite("api_settings.db")
-    print("APIデータソース:ローカルファイル")
+    Data_source = "APIデータソース:ローカルファイル"
 else:
     api_data, secret_data=load_api(temp_dir)
-    print("APIデータソース:データベース")
-    
+    Data_source="APIデータソース:データベース"
+
+save_dir = temp_dir +"/System_Status.txt"
+with open(save_dir, "w", encoding="utf-8") as f:
+    f.write(load_config_status)
+    f.write("\n")
+    f. write(Data_source)
+
 API_KEY = api_data.strip()
 API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
@@ -1091,7 +1097,6 @@ def is_market_open():
     except Exception as e:
         logging.error(f"[市場] 状態取得失敗: {e}")
         return False
-
 
 # === 現在価格取得 ===
 def get_price():
