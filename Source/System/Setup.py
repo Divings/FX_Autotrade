@@ -32,8 +32,8 @@ def setup_database():
         INSERT OR REPLACE INTO api_settings (name, value) VALUES (?, ?)
     """, ("SLACK_WEBHOOK_URL", slack_webhook))
 
-    # 固定で URL を追加（新しいURL）
-    url_value = "https://github.com/Divings/FX_Autotrade/releases/download/Pubkey/"
+    # 固定で URL を追加（最新のURL）
+    url_value = "https://github.com/Divings/Public_Auto_Trade_pac/releases/download/Pubkey/"
     cursor.execute("""
         INSERT OR REPLACE INTO api_settings (name, value) VALUES (?, ?)
     """, ("URL", url_value))

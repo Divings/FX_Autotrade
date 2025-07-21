@@ -1032,7 +1032,7 @@ import subprocess
 import sys
 
 # パラメータ設定
-if URL_Auth!="https://github.com/Divings/FX_Autotrade/releases/download/Pubkey/":
+if URL_Auth!="https://github.com/Divings/Public_Auto_Trade_pac/releases/download/Pubkey/publickey.asc":
     PUBLIC_KEY_URL = URL_Auth + "key/publickey.asc"
 else:
     PUBLIC_KEY_URL = URL_Auth + "publickey.asc"
