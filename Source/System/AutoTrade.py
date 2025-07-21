@@ -951,6 +951,7 @@ def handle_exit(signum, frame):
 conf=load_settings_from_db()
 URL_Auth = conf["URL"]
 
+
 if os.path.exists("api_settings.db"):
     api_data,secret_data = load_api_settings_sqlite("api_settings.db")
     Data_source = "APIデータソース:ローカルファイル"
@@ -1031,7 +1032,11 @@ import subprocess
 import sys
 
 # パラメータ設定
-PUBLIC_KEY_URL = URL_Auth + "key/publickey.asc"
+if URL_Auth!="https://github.com/Divings/FX_Autotrade/releases/download/Pubkey/":
+    PUBLIC_KEY_URL = URL_Auth + "key/publickey.asc"
+else:
+    PUBLIC_KEY_URL = URL_Auth + "publickey.asc"
+
 PUBLIC_KEY_FILE = "/opt/gpg/publickey.asc"
 UPDATE_FILE = "AutoTrade.py"
 SIGNATURE_FILE = "AutoTrade.py.sig"
