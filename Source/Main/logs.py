@@ -33,7 +33,7 @@ def write_log(action, price):
             cursor.execute(sql, (timestamp, action, price))
             conn.commit()
 
-            print("✅ ログを SQLite (trade_logs.db) に書き込みました。")
+            # print("✅ ログを SQLite (trade_logs.db) に書き込みました。")
 
         except sqlite3.Error as err:
             print(f"[ERROR] SQLite エラー: {err}")
@@ -60,7 +60,7 @@ def write_log(action, price):
         cursor.execute(sql, values)
         conn.commit()
 
-        print("✅ ログを MySQL に書き込みました。")
+        # print("✅ ログを MySQL に書き込みました。")
 
     except mysql.connector.Error as err:
         print(f"[ERROR] MySQL エラー: {err}")

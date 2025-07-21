@@ -19,14 +19,14 @@ def load_settings_from_db():
             settings = {name: value for name, value in cursor.fetchall()}
             cursor.close()
             conn.close()
-            print("✅ SQLite (api_settings.db) から設定を読み込みました。")
+            # print("✅ SQLite (api_settings.db) から設定を読み込みました。")
             return settings
         except sqlite3.Error as err:
             print(f"[エラー] SQLite接続エラー: {err}")
             # SQLiteに失敗したらMySQLにフォールバック
             pass
 
-    print("⚠ SQLiteが無いかエラーのため、MySQLから設定を読み込みます。")
+    # print("⚠ SQLiteが無いかエラーのため、MySQLから設定を読み込みます。")
     try:
         # 接続設定を.envから取得
         db_config = {
