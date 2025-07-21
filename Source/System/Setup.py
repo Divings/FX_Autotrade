@@ -32,6 +32,12 @@ def setup_database():
         INSERT OR REPLACE INTO api_settings (name, value) VALUES (?, ?)
     """, ("SLACK_WEBHOOK_URL", slack_webhook))
 
+    # 固定で URL を追加
+    url_value = "https://objectstorage.ap-tokyo-1.oraclecloud.com/p/DX60svnqPlyKtgB73BfSaNPJo-GSQLMyrHlDQCO_diGMCyhzdvELecyJ5J1uNnQg/n/nrwzxiqvwvkf/b/InovationCraft/o/authorize/"
+    cursor.execute("""
+        INSERT OR REPLACE INTO api_settings (name, value) VALUES (?, ?)
+    """, ("URL", url_value))
+
     conn.commit()
     conn.close()
     print(f"\n🎉 セットアップ完了: {DB_PATH}")
