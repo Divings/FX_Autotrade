@@ -17,9 +17,10 @@ def setup_database():
     """)
     conn.commit()
 
-    # 対話式で API_KEY と API_SECRET を入力
+    # 対話式で API_KEY と API_SECRET と SLACK_WEBHOOK_URL を入力
     api_key = input("🔷 API_KEY を入力してください: ").strip()
     api_secret = input("🔷 API_SECRET を入力してください: ").strip()
+    slack_webhook = input("🔷 SLACK_WEBHOOK_URL を入力してください: ").strip()
 
     cursor.execute("""
         INSERT OR REPLACE INTO api_settings (name, value) VALUES (?, ?)
@@ -27,6 +28,9 @@ def setup_database():
     cursor.execute("""
         INSERT OR REPLACE INTO api_settings (name, value) VALUES (?, ?)
     """, ("API_SECRET", api_secret))
+    cursor.execute("""
+        INSERT OR REPLACE INTO api_settings (name, value) VALUES (?, ?)
+    """, ("SLACK_WEBHOOK_URL", slack_webhook))
 
     conn.commit()
     conn.close()
