@@ -951,7 +951,6 @@ def handle_exit(signum, frame):
 conf=load_settings_from_db()
 URL_Auth = conf["URL"]
 
-
 if os.path.exists("api_settings.db"):
     api_data,secret_data = load_api_settings_sqlite("api_settings.db")
     Data_source = "APIデータソース:ローカルファイル"
