@@ -6,7 +6,7 @@ import os
 
 temp_dir = tempfile.mkdtemp()
 # パラメータ設定
-PUBLIC_KEY_URL =  "https://objectstorage.ap-tokyo-1.oraclecloud.com/p/DX60svnqPlyKtgB73BfSaNPJo-GSQLMyrHlDQCO_diGMCyhzdvELecyJ5J1uNnQg/n/nrwzxiqvwvkf/b/InovationCraft/o/authorize/key/publickey.asc"
+PUBLIC_KEY_URL =  "https://github.com/Divings/Public_Auto_Trade_pac/releases/download/Pubkey/publickey.asc"
 PUBLIC_KEY_FILE = "/opt/gpg/publickey.asc"
 UPDATE_FILE = "AutoTrade.py"
 SIGNATURE_FILE = "AutoTrade.py.sig"
@@ -50,6 +50,6 @@ public_key_path = os.path.join(temp_dir, "publickey.asc")
 download_public_key(PUBLIC_KEY_URL, public_key_path)
 import_public_key(temp_dir, public_key_path)
 out = verify_signature(temp_dir, SIGNATURE_FILE, UPDATE_FILE)
-if out == 0:
-    notify_slack("[INFO] 署名検証成功")
+# if out == 0:
+#    notify_slack("[INFO] 署名検証成功")
 sys.exit(out)
