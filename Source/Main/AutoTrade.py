@@ -1608,7 +1608,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global VOL_THRESHOLD
     last_rsi_state = None
     last_adx_state = None
-    
+    av = 0
     sstop = 0
     vstop = 0
     nstop = 0
@@ -1661,13 +1661,28 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         prices = get_price()
         now = datetime.now()
+        
+        if now.hour == 0 and now.minute == 0 and av == 0:
+            failSafe() #翌日になったら強制決済
+            av = 1
+        else:
+            av = 0
+
         if now.hour == 0 and now.minute == 0:
             if last == 0:
                 last_balance()
                 last = 1
         elif last == 1:
             last = 0
-            
+        
+        if now.hour >= 0 and now.hour <= 6:
+            if m == 0:
+                notify_slack(" 取引抑止時刻になりました、取引を中断します")
+                m = 1
+            continue
+        else:
+            m = 0
+
         if now.hour == 18 and now.minute == 30 and shared_state.get("price_reset_done") != True:
             high_prices.clear()
             low_prices.clear()
