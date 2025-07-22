@@ -1668,7 +1668,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         elif last == 1:
             last = 0
             
-        if now.hour == 17 and now.minute == 30 and shared_state.get("price_reset_done") != True:
+        if now.hour == 18 and now.minute == 30 and shared_state.get("price_reset_done") != True:
             high_prices.clear()
             low_prices.clear()
             close_prices.clear()
