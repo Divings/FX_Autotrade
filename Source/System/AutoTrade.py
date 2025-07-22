@@ -1675,7 +1675,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         elif last == 1:
             last = 0
         
-        if now.hour >= 0 and now.hour <= 6:
+        if (now.hour < 6) or (now.hour == 6 and now.minute == 0):
             if m == 0:
                 notify_slack(" 取引抑止時刻になりました、取引を中断します")
                 m = 1
