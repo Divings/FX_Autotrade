@@ -1965,7 +1965,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     rsi_ok = False
                 
                 if is_high_volatility(close_prices) == False:
-                    msg = f"[スキップ] {trend} ボラティリティ低のためエントリースキップ"
+                    if trend is None:
+                        msg = f"[スキップ] ボラリティ低のためエントリースキップ"
+                    else:
+                        msg = f"[スキップ] {trend} ボラリティ低のためエントリースキップ"
                     logging.info(msg)
                     notify_slack(msg)
                     continue
