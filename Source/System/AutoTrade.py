@@ -1608,6 +1608,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global VOL_THRESHOLD
     last_rsi_state = None
     last_adx_state = None
+    
+    vcount = 0
     av = 0
     sstop = 0
     vstop = 0
@@ -1951,6 +1953,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue  # または return
         else:
             logging.info("⚠ 指標発表予定なし")
+        
+        if len(price_buffer) < 180:
+            count = len(price_buffer)
+            if count != vcount:
+                notify_slack(f"[スキップ]price_bufferデータが許容値に未達 {count}")
+            vcount = count
+            continue
+        
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
