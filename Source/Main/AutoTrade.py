@@ -37,13 +37,15 @@ from state_utils import (
 from Price import extract_price_from_response
 from logs import write_log
 from Assets import assets
-
+from configs import load_weekconfigs
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 
 events_df = pd.DataFrame(columns=["datetime", "impact_level", "event"])
 skip_until = None
+
+value = load_weekconfigs()
 
 SKIP_MINUTES = {
     "高": 40,
@@ -1960,6 +1962,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 notify_slack(f"[スキップ]price_bufferデータが許容値に未達 {count}")
             vcount = count
             continue
+
+        if value ==1 and now.weekday() == 4:
+                notify_slack(f"[スキップ] 金曜日のため処理をスキップ")
+                m = 1
+            continue
+        else:
+            m = 0
         
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
