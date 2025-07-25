@@ -11,6 +11,6 @@ def load_weekconfigs():
 
         # 値を取得
         host = config.get('settings', 'value')
-        return host
+        return int(host)
     else:
         return 0
