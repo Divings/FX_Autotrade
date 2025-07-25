@@ -1964,6 +1964,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
 
         if value ==1 and now.weekday() == 4:
+            if m == 0:
                 notify_slack(f"[スキップ] 金曜日のため処理をスキップ")
                 m = 1
             continue
