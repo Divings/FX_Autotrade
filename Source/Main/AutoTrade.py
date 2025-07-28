@@ -1971,6 +1971,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             m = 0
         
+        now = datetime.now()
+        if now.hour < 20 or (now.hour == 20 and now.minute < 30):
+            if m == 0:
+                notify_slack(f"[スキップ] 取引開始時間外なのでスキップ（{now.strftime('%H:%M')}）")
+                m = 1
+            continue  # 取引処理スキップ
+        else:
+             m = 0  # 通知リセット（次回のスキップ通知を可能に）
+        
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
