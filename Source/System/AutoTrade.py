@@ -126,6 +126,20 @@ def is_skip_active(now=None):
         return True
     return False
 
+def check_and_set_event_skip():
+    df = fetch_usdjpy_economic_events()
+    now = datetime.now()
+
+    for _, row in df.iterrows():
+        event_time = row["datetime"]
+        impact_level = row["impact_level"]
+
+        # 現在から30分以内に開始される重要イベントを検出
+        if now <= event_time <= now + timedelta(minutes=30):
+            set_dynamic_skip(event_time, impact_level)
+            break  # 複数あっても最初の一件でOK（必要に応じて調整）
+
+
 # ミッドナイトモード(Trueで有効化)
 night = True
 SYS_VER = "73.0.0"
@@ -908,20 +922,6 @@ def adjust_max_loss(prices,
 
 
 import asyncio
-
-async def schedule_fetch_events():
-    """
-    0:00に一度だけ指標を取得するループ
-    """
-    global events_df
-    while True:
-        now = datetime.now()
-        if now.hour == 0 and now.minute == 0:
-            print(f"[{now}] 指標リストを更新します")
-            events_df = fetch_usdjpy_economic_events()
-            print(events_df)
-            await asyncio.sleep(60)  # 1分待機してから次のループ
-        await asyncio.sleep(10)
 
 def is_event_active():
     """
@@ -1952,6 +1952,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
 
         now = datetime.now()
+        check_and_set_event_skip()
         if is_skip_active():
             logging.info("⚠ 指標スキップ中 → エントリー停止")
             continue  # または return
@@ -1974,17 +1975,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             m = 0
-        
-        now = datetime.now()
-        if now.hour < 20 or (now.hour == 20 and now.minute < 28):
-            if m == 0:
-                with open("notification_log.txt", "a", encoding="utf-8") as f:
-                    f.write(f"[スキップ] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - 取引開始前のためスキップ\n")
-                m = 1
-            continue  # 取引処理スキップ
-        else:
-             m = 0  # 通知リセット（次回のスキップ通知を可能に）
-        
+                
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
@@ -2188,7 +2179,7 @@ async def auto_trade():
     trend_task = loop.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
     loss_cut_task = loop.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quick_profit_task = loop.create_task(monitor_quick_profit(shared_state, stop_event))
-    monitor_s=loop.create_task(schedule_fetch_events())
+    
     
     # エラー通知
     server_task.add_done_callback(lambda t: notify_slack(f"情報保存用サーバが終了しました: {t.exception()}"))
@@ -2201,7 +2192,6 @@ async def auto_trade():
         trend_task,
         loss_cut_task,
         quick_profit_task,
-        monitor_s,
         )
     try:
         while True:
