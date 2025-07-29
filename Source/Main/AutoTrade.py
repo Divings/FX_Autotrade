@@ -1619,6 +1619,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     timestop = 0
     m = 0
     s = 0
+    count = 0
     last = 0
     n_nonce = 0
     m_note = 0
@@ -1946,9 +1947,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.info("[スキップ] RSI下限で警戒")
             await asyncio.sleep(interval_sec)
             continue
+
         short_stdev = statistics.stdev(list(price_buffer)[-5:])
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
-               
+
         now = datetime.now()
         if is_skip_active():
             logging.info("⚠ 指標スキップ中 → エントリー停止")
@@ -1957,11 +1959,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.info("⚠ 指標発表予定なし")
         
         if len(price_buffer) < 180:
-            count = len(price_buffer)
-            if count != vcount:
+            if count == 0:
+                count = 1            
                 notify_slack(f"[スキップ]price_bufferデータが許容値に未達 {count}")
-            vcount = count
+                # vcount = count
             continue
+        else:
+            count = 0
 
         if value ==1 and now.weekday() == 4:
             if m == 0:
@@ -1974,7 +1978,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         now = datetime.now()
         if now.hour < 20 or (now.hour == 20 and now.minute < 28):
             if m == 0:
-                notify_slack(f"[スキップ] 取引開始時間外なのでスキップ（{now.strftime('%H:%M')}）")
+                with open("notification_log.txt", "a", encoding="utf-8") as f:
+                    f.write(f"[スキップ] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - 取引開始前のためスキップ\n")
                 m = 1
             continue  # 取引処理スキップ
         else:
