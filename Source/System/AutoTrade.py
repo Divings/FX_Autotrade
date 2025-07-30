@@ -1758,7 +1758,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 continue
             else:
                 shared_state["vstop_active"] = False
-
+        if USD_TIME == 0:
+            if (18 <= now.hour < 24) or (0 <= now.hour < 2):
+                if not shared_state.get("vstop_active", False):                   
+                    notify_slack(f"[クールダウン] 欧州/NY市場のため自動売買スキップ")
+                    logging.info(f"[時間制限] 欧州/NY市場のため取引スキップ")
+                    shared_state["vstop_active"] = True
+                    shared_state["forced_entry_date"] = False
+                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
+                        pass
+                    else:
+                        save_price_history(high_prices, low_prices, close_prices)
+                await asyncio.sleep(interval_sec)
+                continue
+            else:
+                shared_state["vstop_active"] = False
+                
         spread = ask - bid
         if spread > MAX_SPREAD:
             shared_state["trend"] = None
