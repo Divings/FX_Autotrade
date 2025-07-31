@@ -224,9 +224,6 @@ from EncryptSecureDEC import decrypt_file
 import statistics
 
 import platform
-# if platform.python_version() != "3.9.21":
-#    notify_slack("エラー:動作保証バージョンを満たしていません")
-#    sys.exit(1)
 
 def is_volatile(prices, candles, period=5):
     import statistics
@@ -278,7 +275,6 @@ def is_volatile(prices, candles, period=5):
         return True
 
     return False  # 安定
-
 
 def download_two_files(base_url, download_dir):
     filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
@@ -2326,8 +2322,9 @@ async def auto_trade():
 
 if __name__ == "__main__":
     
+    if os_name != "Windows":
     # import_public_key(key_box, public_key_path)
-    verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
+        verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
     try:
         asyncio.run(auto_trade())
     except SystemExit as e:
