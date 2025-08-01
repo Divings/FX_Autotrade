@@ -1676,6 +1676,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         elif last == 1:
             last = 0
         
+        if value == 1 and now.weekday() == 4:
+            if m == 0:
+                notify_slack(f"[スキップ] 金曜日のため処理をスキップ")
+                m = 1
+            continue
+        else:
+            m = 0
+
         if (now.hour < 6) or (now.hour == 6 and now.minute == 0):
             if m == 0:
                 notify_slack(" 取引抑止時刻になりました、取引を中断します")
@@ -1979,13 +1987,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             count = 0
 
-        if value ==1 and now.weekday() == 4:
-            if m == 0:
-                notify_slack(f"[スキップ] 金曜日のため処理をスキップ")
-                m = 1
-            continue
-        else:
-            m = 0
+        
                 
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
