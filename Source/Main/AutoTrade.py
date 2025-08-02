@@ -1259,7 +1259,7 @@ def fee_test(trend):
     else:
         logging.error(f"無効なトレンド指定: {trend}")
         return
-    amount = 0.1 * 10000 * price  # 0.1lot = 1000通貨、1lot = 10000通貨
+    amount = 0.1 * LOT_SIZE * price  # 0.1lot = 1000通貨、1lot = 10000通貨
     fee = amount * 0.00002  # 0.002%
     notify_slack(f"想定手数料は、{fee:.3f} 円です")
     logging.info(f"想定手数料: {fee:.3f} 円 (ロット: {LOT_SIZE}, レート: {price}, 約定金額: {amount:.2f})")
