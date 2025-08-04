@@ -1971,7 +1971,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
 
         now = datetime.now()
-        check_and_set_event_skip()
+        # check_and_set_event_skip()
         if is_skip_active():
             logging.info("⚠ 指標スキップ中 → エントリー停止")
             continue  # または return
