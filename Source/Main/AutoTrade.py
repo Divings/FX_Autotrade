@@ -1066,7 +1066,7 @@ def verify_signature(gpg_home, signature_file, update_file):
         print(result.stdout)
         print(result.stderr)
         sys.exit(1)
-    notify_slack("[INFO] 署名検証成功")
+    # notify_slack("[INFO] 署名検証成功")
 
 def notify_asset():
     out=assets(API_KEY,API_SECRET)
