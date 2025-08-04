@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+import requests
 
 DB_PATH = Path("api_settings.db")
 
@@ -43,6 +44,24 @@ def setup_database():
     print(f"\n🎉 セットアップ完了: {DB_PATH}")
 
 if __name__ == "__main__":
+    
+    # ダウンロード対象のURL
+    url = "https://github.com/Divings/Public_Auto_Trade_pac/releases/download/bot_config/bot_config.xml"
+
+    # 保存先ファイル名
+    save_path = "/opt/Innovations/System/bot_config.xml"
+
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # エラーがあれば例外が出る
+
+        with open(save_path, "wb") as f:
+            f.write(response.content)
+
+        print(f"設定のテンプレートを取得: {save_path}")
+    except requests.exceptions.RequestException as e:
+        print(f"ダウンロードエラー: {e}")
+
     if DB_PATH.exists():
         overwrite = input(f"⚠ 既に {DB_PATH} が存在します。上書きしますか？ (y/N): ").strip().lower()
         if overwrite != "y":
