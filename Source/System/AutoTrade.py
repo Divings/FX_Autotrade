@@ -1591,6 +1591,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global first_start
     global candle_buffer
     global price_buffer
+    mcv = 0
     # price_buffer = deque(maxlen=240)
     global MAX_SPREAD
     high_prices, low_prices, close_prices = load_price_history()
@@ -1727,8 +1728,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         close_prices.append(mid)
         
         if len(price_buffer) != 240:
+            mcv = 0
             logging.info(f"price_bufferの長さ: {len(price_buffer)}")
-        
+        else:
+            if mcv == 0:
+                logging.info(f"price_bufferは十分な長さです")
+                mcv = 1
         if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
             logging.info(f"[待機中] ADX計算用に蓄積中: {len(close_prices)}/28")
             await asyncio.sleep(interval_sec)
