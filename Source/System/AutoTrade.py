@@ -1447,7 +1447,7 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
         return []
 
     candles=[]
-    logging.info(f"price_bufferの長さ: {len(price_buffer)}")
+    #logging.info(f"price_bufferの長さ: {len(price_buffer)}")
     for i in range(2):
         start = -40 + i*20
         end = None if i == 1 else start + 20
@@ -1725,7 +1725,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         high_prices.append(ask)
         low_prices.append(bid)
         close_prices.append(mid)
-        
+        logging.info(f"price_bufferの長さ: {len(price_buffer)}")
         if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
             logging.info(f"[待機中] ADX計算用に蓄積中: {len(close_prices)}/28")
             await asyncio.sleep(interval_sec)
