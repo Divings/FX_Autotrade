@@ -1646,6 +1646,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 high_prices.clear()
                 low_prices.clear()
                 close_prices.clear()
+                price_buffer.clear()
                 shared_state["price_reset_done"] = True
             continue
         sstop = 0
@@ -1696,7 +1697,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             high_prices.clear()
             low_prices.clear()
             close_prices.clear()
-            
+            price_buffer.clear()
             m = 0
             shared_state["price_reset_done"] = True 
         else:
@@ -1761,10 +1762,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"[時間制限] 東京市場のため取引スキップ")
                     shared_state["vstop_active"] = True
                     shared_state["forced_entry_date"] = False
-                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
-                        pass
-                    else:
-                        save_price_history(high_prices, low_prices, close_prices)
+                    
                 await asyncio.sleep(interval_sec)
                 continue
             else:
@@ -1776,10 +1774,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"[時間制限] 欧州/NY市場のため取引スキップ")
                     shared_state["vstop_active"] = True
                     shared_state["forced_entry_date"] = False
-                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
-                        pass
-                    else:
-                        save_price_history(high_prices, low_prices, close_prices)
+                    
                 await asyncio.sleep(interval_sec)
                 continue
             else:
@@ -2340,8 +2335,8 @@ if __name__ == "__main__":
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
         save_state(shared_state)
-        save_price_buffer(price_buffer)
+        #save_price_buffer(price_buffer)
     except:
         save_state(shared_state)
-        save_price_buffer(price_buffer)
+        #save_price_buffer(price_buffer)
         
