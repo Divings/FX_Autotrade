@@ -1592,7 +1592,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global candle_buffer
     global price_buffer
     mcv = 0
-    # price_buffer = deque(maxlen=240)
+    price_buffer = deque(maxlen=240)
     global MAX_SPREAD
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
@@ -1997,8 +1997,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             count = 0
 
-        
-                
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
