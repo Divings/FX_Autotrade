@@ -37,11 +37,112 @@ from state_utils import (
 from Price import extract_price_from_response
 from logs import write_log
 from Assets import assets
+from configs import load_weekconfigs
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+
+events_df = pd.DataFrame(columns=["datetime", "impact_level", "event"])
+skip_until = None
+
+value = load_weekconfigs()
+
+SKIP_MINUTES = {
+    "高": 40,
+    "中": 20,
+    "低": 0,
+}
+
+import sqlite3
+def load_api_settings_sqlite(db_path="api_settings.db"):
+    """
+    SQLite から API_KEY と API_SECRET を取得して返す
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, value FROM api_settings WHERE name IN ('API_KEY', 'API_SECRET')")
+    rows = dict(cursor.fetchall())
+    conn.close()
+
+    api_key = rows.get("API_KEY", "")
+    api_secret = rows.get("API_SECRET", "")
+
+    return api_key, api_secret
+
+def fetch_usdjpy_economic_events():
+    url = "https://jp.investing.com/economic-calendar/"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.content, "html.parser")
+
+    rows = soup.select("table.economicCalendarTable tbody tr")
+    events = []
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    for row in rows:
+        time_cell = row.find("td", class_="first left time")
+        if time_cell is None:
+            continue
+        time_str = time_cell.get_text(strip=True)
+        try:
+            dt = datetime.strptime(f"{today} {time_str}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        currency = row.find("td", class_="left flagCur noWrap").get_text(strip=True)
+        impact_html = row.find("td", class_="sentiment")
+        impact = impact_html.get_text(strip=True).count("牛")
+        event = row.find("td", class_="event").get_text(strip=True)
+
+        if currency not in ["USD", "JPY"]:
+            continue
+
+        events.append({
+            "datetime": dt,
+            "currency": currency,
+            "impact": impact,
+            "event": event
+        })
+
+    df = pd.DataFrame(events)
+    if not df.empty:
+        df["impact_level"] = df["impact"].map({3: "高", 2: "中", 1: "低", 0: "低"})
+        df = df[["datetime", "currency", "impact_level", "event"]]
+    return df
+
+def set_dynamic_skip(event_time, impact_level):
+    global skip_until
+    minutes = SKIP_MINUTES.get(impact_level, 0)
+    if minutes > 0:
+        skip_until = event_time + timedelta(minutes=minutes)
+        notify_slack(f"⚠ 指標スキップ開始: {event_time}〜{skip_until} ({impact_level})")
+
+def is_skip_active(now=None):
+    global skip_until
+    now = now or datetime.now()
+    if skip_until and now <= skip_until:
+        remaining = (skip_until - now).total_seconds() / 60
+        logging.info(f"⛔ スキップ中（あと {remaining:.1f} 分）")
+        return True
+    return False
+
+def check_and_set_event_skip():
+    df = fetch_usdjpy_economic_events()
+    now = datetime.now()
+
+    for _, row in df.iterrows():
+        event_time = row["datetime"]
+        impact_level = row["impact_level"]
+
+        # 現在から30分以内に開始される重要イベントを検出
+        if now <= event_time <= now + timedelta(minutes=30):
+            set_dynamic_skip(event_time, impact_level)
+            break  # 複数あっても最初の一件でOK（必要に応じて調整）
+
 
 # ミッドナイトモード(Trueで有効化)
 night = True
-MAX_Stop = 180
-SYS_VER = "15.0.0"
+SYS_VER = "73.0.0"
 
 import numpy as np
 
@@ -123,9 +224,6 @@ from EncryptSecureDEC import decrypt_file
 import statistics
 
 import platform
-if platform.python_version() != "3.9.21":
-    notify_slack("エラー:動作保証バージョンを満たしていません")
-    sys.exit(1)
 
 def is_volatile(prices, candles, period=5):
     import statistics
@@ -178,7 +276,6 @@ def is_volatile(prices, candles, period=5):
 
     return False  # 安定
 
-
 def download_two_files(base_url, download_dir):
     filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
     
@@ -199,7 +296,6 @@ import requests
 import lzma
 import hashlib
 import json
-import datetime
 import getpass
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import PBKDF2
@@ -331,6 +427,23 @@ shared_state = {
     "trail_offset":20
 }
 
+# 通知系のキーを初期化
+def reset_notifications(shared_state: dict):
+    keys_to_reset = {
+        "trend_init_notice": False,
+        "margin_alert_sent": False,
+        "adx_wait_notice": False,
+        "rsi_adx_none_notice": False,
+        "last_skip_notice": None,
+        "last_margin_notify": None,
+        "last_skip_hash": None,
+    }
+
+    for key, value in keys_to_reset.items():
+        shared_state[key] = value
+
+reset_notifications(shared_state)
+
 import configparser
 def load_ini():
     try:
@@ -421,9 +534,9 @@ LOG_FILE1 = f"{temp_dir}/fx_debug_log.txt"
 try:
     _log_last_reset = datetime.now()
 except:
-    _log_last_reset = datetime.datetime.now()
+    _log_last_reset = datetime.now()
 os.makedirs("last_temp", exist_ok=True)
-now = datetime.datetime.now()
+now = datetime.now()
 
 # フォーマット
 formatted = now.strftime("%Y/%m/%d %H:%M")
@@ -467,6 +580,7 @@ notify_slack("自動売買システム起動")
 
 # == 記録済みデータ読み込み ===
 shared_state = load_state()
+reset_notifications(shared_state)
 if shared_state.get("cmd") == "save_adx":
     shared_state["cmd"] == None
 
@@ -488,7 +602,8 @@ DEFAULT_CONFIG = {
     "MACD_DIFF_THRESHOLD":0.002,
     "SKIP_MODE":0,
     "SYMBOL":"USD_JPY",
-    "USD_TIME":0
+    "USD_TIME":0,
+    "MAX_Stop":30
 }
 
 macd_valid = False
@@ -534,7 +649,7 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             if elapsed > MAX_HOLD:
-                if shared_state.get("firsts")==True:
+                if shared_state.get("firsts")==True and USD_TIME==1:
                     logging.info("延長 保有時間超過だが初動検知のためスキップ")
                     return
                 if profit > EXTENDABLE_LOSS and shared_state.get("trend") == side:
@@ -685,6 +800,9 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             #mid = (ask + bid) / 2
 
             spread = ask - bid
+            if spread > MAX_SPREAD:
+                notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
+                continue
             
             if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
                 if spread > MAX_SPREAD:
@@ -712,8 +830,18 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
 
         await asyncio.sleep(interval_sec)
 
+from load_xml import load_config_from_xml
+
+import os
+if os.path.exists("bot_config.xml"):
+    config = load_config_from_xml("bot_config.xml")
+    load_config_status="設定ソース:xml"
+else:
 # === 設定読み込み ===
-config = load_config_from_mysql()
+    config = load_config_from_mysql()
+    load_config_status = "設定ソース:Mysql"
+#print(load_config_status)
+    
 SYMBOL = config["SYMBOL"]
 LOT_SIZE = config["LOT_SIZE"]
 MAX_SPREAD = config["MAX_SPREAD"]
@@ -726,6 +854,11 @@ TIME_STOP = config["TIME_STOP"]
 MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 USD_TIME = config["USD_TIME"]
+MAX_Stop = config["MAX_Stop"]
+
+def is_night_time():
+    now = datetime.now().hour
+    return (16 <= now <= 23) or (0 <= now <= 2)
 
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     # deque, list, tuple のいずれかか確認
@@ -747,8 +880,8 @@ _PREV_MAX_LOSS = None
 
 def adjust_max_loss(prices,
                     base_loss=50,
-                    vol_thresholds=(0.03, 0.05),
-                    adjustments=(5, 10),
+                    vol_thresholds=(0.005, 0.01),
+                    adjustments=(-5, 10),
                     period=5):
     """
     ボラティリティに応じて MAX_LOSS を調整してグローバルに設定
@@ -783,6 +916,29 @@ def adjust_max_loss(prices,
         notify_slack(msg)
         _PREV_MAX_LOSS = MAX_LOSS
 
+
+import asyncio
+
+def is_event_active():
+    """
+    今が指標時間帯かどうか判定する
+    """
+    global events_df
+    now = datetime.now()
+    window_start = now - timedelta(minutes=10)
+    window_end = now + timedelta(minutes=10)
+
+    if not events_df.empty:
+        nearby = events_df[
+            (events_df["datetime"] >= window_start) &
+            (events_df["datetime"] <= window_end)
+        ]
+        if not nearby.empty:
+            for _, row in nearby.iterrows():
+                logging.info(f"⚠ 指標時間帯検出！{row['event']} （{row['impact_level']}）")
+            return True
+    return False
+
 def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
     save_state(shared_state)
@@ -792,7 +948,19 @@ def handle_exit(signum, frame):
 # === 環境変数の読み込み ===
 conf=load_settings_from_db()
 URL_Auth = conf["URL"]
-api_data, secret_data=load_api(temp_dir)
+
+if os.path.exists("api_settings.db"):
+    api_data,secret_data = load_api_settings_sqlite("api_settings.db")
+    Data_source = "APIデータソース:ローカルファイル"
+else:
+    api_data, secret_data=load_api(temp_dir)
+    Data_source="APIデータソース:データベース"
+
+save_dir = temp_dir +"/System_Status.txt"
+with open(save_dir, "w", encoding="utf-8") as f:
+    f.write(load_config_status)
+    f.write("\n")
+    f. write(Data_source)
 
 API_KEY = api_data.strip()
 API_SECRET = secret_data.strip()
@@ -848,6 +1016,8 @@ def last_balance():
         logging.info("データ挿入成功")
     else:
         logging.error("データ挿入失敗")
+        with open("Error.log", "w", encoding="utf-8") as f:
+            f.write(available_amounts)
 
     with open("pricesData.txt", "w", encoding="utf-8") as f:
         f.write(available_amounts)
@@ -859,7 +1029,7 @@ import subprocess
 import sys
 
 # パラメータ設定
-PUBLIC_KEY_URL = URL_Auth + "key/publickey.asc"
+PUBLIC_KEY_URL = URL_Auth + "publickey.asc"
 PUBLIC_KEY_FILE = "/opt/gpg/publickey.asc"
 UPDATE_FILE = "AutoTrade.py"
 SIGNATURE_FILE = "AutoTrade.py.sig"
@@ -896,7 +1066,7 @@ def verify_signature(gpg_home, signature_file, update_file):
         print(result.stdout)
         print(result.stderr)
         sys.exit(1)
-    notify_slack("[INFO] 署名検証成功")
+    # notify_slack("[INFO] 署名検証成功")
 
 def notify_asset():
     out=assets(API_KEY,API_SECRET)
@@ -914,8 +1084,22 @@ import_public_key(key_box, public_key_path)
 # === トレンド判定関数 ===
 signal.signal(signal.SIGTERM, handle_exit)
 
+# === 営業状態チェック ===
+def is_market_open():
+    try:
+        response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
+        response.raise_for_status()
+        status = response.json().get("data", {}).get("status")
+        # notify_slack(f"[市場] ステータス: {status}")
+        return status
+    except Exception as e:
+        logging.error(f"[市場] 状態取得失敗: {e}")
+        return False
+
 # === 現在価格取得 ===
 def get_price():
+    if is_market_open() != "OPEN":
+        return None
     try:
         res = requests.get(f"{FOREX_PUBLIC_API}/v1/ticker")
         res.raise_for_status()
@@ -985,18 +1169,6 @@ macd_valid = False
 def create_signature(timestamp, method, path, body=""):
     message = timestamp + method + path + body
     return hmac.new(API_SECRET.encode(), message.encode(), hashlib.sha256).hexdigest()
-
-# === 営業状態チェック ===
-def is_market_open():
-    try:
-        response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
-        response.raise_for_status()
-        status = response.json().get("data", {}).get("status")
-        # notify_slack(f"[市場] ステータス: {status}")
-        return status
-    except Exception as e:
-        logging.error(f"[市場] 状態取得失敗: {e}")
-        return False
 
 # === 建玉取得 ===
 def get_positions():
@@ -1087,9 +1259,9 @@ def fee_test(trend):
     else:
         logging.error(f"無効なトレンド指定: {trend}")
         return
-    amount = 0.1 * 10000 * price  # 0.1lot = 1000通貨、1lot = 10000通貨
+    amount = 1.0 * 10000 * price  # 0.1lot = 1000通貨、1lot = 10000通貨
     fee = amount * 0.00002  # 0.002%
-    notify_slack(f"想定手数料は、{fee:.3f} 円です")
+    # notify_slack(f"想定手数料は、{fee:.3f} 円です")
     logging.info(f"想定手数料: {fee:.3f} 円 (ロット: {LOT_SIZE}, レート: {price}, 約定金額: {amount:.2f})")
         
 # === 注文発行 ===
@@ -1211,7 +1383,7 @@ def close_order(position_id, size, side):
         return None
 
 def first_order(trend,shared_state=None):
-    # now = datetime.datetime.now()
+    # now = datetime.now()
     global rootOrderIds
     positions = get_positions()
     prices = get_price()
@@ -1222,7 +1394,7 @@ def first_order(trend,shared_state=None):
     ask = prices["ask"]
     spread = ask - bid
     if spread > MAX_SPREAD:
-        notify_slack(f"[警告] スプレッドに差が許容範囲外なので取引中止")
+        notify_slack(f"[警告] スプレッドの差が許容範囲外なので取引中止")
         return 3
     if not positions:
         if trend is None:
@@ -1261,7 +1433,7 @@ def failSafe():
             close_side = "SELL" if side == "BUY" else "BUY"
             close_order(pid,size_str,close_side)
             bid = prices["bid"]
-            write_log("LOSS_CUT", bid)
+            write_log("Fail_Safe", bid)
     else:
         print("強制決済建玉なし")
         return 0
@@ -1275,7 +1447,7 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
         return []
 
     candles=[]
-    logging.info(f"price_bufferの長さ: {len(price_buffer)}")
+    #logging.info(f"price_bufferの長さ: {len(price_buffer)}")
     for i in range(2):
         start = -40 + i*20
         end = None if i == 1 else start + 20
@@ -1294,7 +1466,7 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
 async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles):
     shared_state["trend"] = trend
-    shared_state["trend_start_time"] = datetime.datetime.now()
+    shared_state["trend_start_time"] = datetime.now()
     notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
 
     if not candles or len(candles) < 2:
@@ -1321,7 +1493,7 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candle
         logging.info(f"[エントリー判定] {trend} トレンド確定")
 
 def dynamic_filter(adx, rsi, bid, ask):
-    now = datetime.datetime.now()
+    now = datetime.now()
     hour = now.hour
 
     # スプレッドの計算
@@ -1419,6 +1591,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global first_start
     global candle_buffer
     global price_buffer
+    mcv = 0
     # price_buffer = deque(maxlen=240)
     global MAX_SPREAD
     high_prices, low_prices, close_prices = load_price_history()
@@ -1431,15 +1604,19 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     last_notified = {}  # 建玉ごとの通知済みprofit記録
     max_profits = {}    # 建玉ごとの最大利益記録
     TRAILING_STOP = 15
-    
+    global VOL_THRESHOLD
     last_rsi_state = None
     last_adx_state = None
+    
+    vcount = 0
+    av = 0
     sstop = 0
     vstop = 0
     nstop = 0
     timestop = 0
     m = 0
     s = 0
+    count = 0
     last = 0
     n_nonce = 0
     m_note = 0
@@ -1458,7 +1635,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         today = datetime.now()
         weekday_number = today.weekday()
         status_market = is_market_open()
-        if status_market != "OPEN" or weekday_number == 6 or weekday_number == 5:
+        
+        if status_market != "OPEN":
             if sstop == 0:
                 notify_slack(f"[市場] 市場が{status_market}中")
                 logging.info("[市場] 市場が閉場中")
@@ -1468,7 +1646,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 high_prices.clear()
                 low_prices.clear()
                 close_prices.clear()
-                price_buffer.clear()
                 shared_state["price_reset_done"] = True
             continue
         sstop = 0
@@ -1482,23 +1659,49 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             shared_state["notified_cooldown"] = False
-
+        
         prices = get_price()
         now = datetime.now()
+        
+        if now.hour == 0 and now.minute == 0 and av == 0:
+            failSafe() #翌日になったら強制決済
+            av = 1
+        else:
+            av = 0
+
         if now.hour == 0 and now.minute == 0:
             if last == 0:
                 last_balance()
                 last = 1
         elif last == 1:
             last = 0
-            
-        if now.hour < 4:
+        
+        if value == 1 and now.weekday() == 4:
+            if m == 0:
+                notify_slack(f"[スキップ] 金曜日のため処理をスキップ")
+                m = 1
+            continue
+        else:
+            m = 0
+
+        if (now.hour < 6) or (now.hour == 6 and now.minute == 0):
+            if m == 0:
+                notify_slack(" 取引抑止時刻になりました、取引を中断します")
+                m = 1
+            continue
+        else:
+            m = 0
+
+        if now.hour == 18 and now.minute == 30 and shared_state.get("price_reset_done") != True:
             high_prices.clear()
             low_prices.clear()
             close_prices.clear()
-            price_buffer.clear()
+            
             m = 0
             shared_state["price_reset_done"] = True 
+        else:
+            shared_state["price_reset_done"] = False
+
         if now.hour == 6:
             if s == 0:
                 notify_asset()
@@ -1509,14 +1712,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         from datetime import datetime, timezone
 
         now =  datetime.now(timezone.utc)
-
-        # 日本時間（UTC+9）に換算
-        hour_jst = (now.hour + 9) % 24
-
-        if 9 <= hour_jst <= 22:
-            MAX_SPREAD = 0.03  # 日中は今のまま
-        else:
-            MAX_SPREAD = 0.007  # 夜間は厳しめ
 
         if not prices:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
@@ -1532,6 +1727,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         low_prices.append(bid)
         close_prices.append(mid)
         
+        if len(price_buffer) != 240:
+            mcv = 0
+            logging.info(f"price_bufferの長さ: {len(price_buffer)}")
+        else:
+            if mcv == 0:
+                logging.info(f"price_bufferは十分な長さです")
+                mcv = 1
         if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
             logging.info(f"[待機中] ADX計算用に蓄積中: {len(close_prices)}/28")
             await asyncio.sleep(interval_sec)
@@ -1546,6 +1748,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
 
         now = datetime.now()
+        if  now.weekday() == 5 and now.hour >= 5 and vccm == 0:
+            failSafe() # 取引中に市場が止まる前に決済
+            vccm = 1
+        else:
+            vccm = 0
+            
         if USD_TIME == 1:
             if now.hour >= 6 and now.hour <= 16:
                 if not shared_state.get("vstop_active", False):                   
@@ -1561,7 +1769,22 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 continue
             else:
                 shared_state["vstop_active"] = False
-
+        if USD_TIME == 0:
+            if (18 <= now.hour < 24) or (0 <= now.hour < 2):
+                if not shared_state.get("vstop_active", False):                   
+                    notify_slack(f"[クールダウン] 欧州/NY市場のため自動売買スキップ")
+                    logging.info(f"[時間制限] 欧州/NY市場のため取引スキップ")
+                    shared_state["vstop_active"] = True
+                    shared_state["forced_entry_date"] = False
+                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
+                        pass
+                    else:
+                        save_price_history(high_prices, low_prices, close_prices)
+                await asyncio.sleep(interval_sec)
+                continue
+            else:
+                shared_state["vstop_active"] = False
+                
         spread = ask - bid
         if spread > MAX_SPREAD:
             shared_state["trend"] = None
@@ -1750,9 +1973,32 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.info("[スキップ] RSI下限で警戒")
             await asyncio.sleep(interval_sec)
             continue
+
         short_stdev = statistics.stdev(list(price_buffer)[-5:])
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
+
+        now = datetime.now()
+        try:
+            check_and_set_event_skip()
+        except:
+            pass
+        if is_skip_active():
+            logging.info("⚠ 指標スキップ中 → エントリー停止")
+            continue  # または return
+        else:
+            logging.info("⚠ 指標発表予定なし")
         
+        if len(price_buffer) < 180:
+            if count == 0:
+                count = 1            
+                notify_slack(f"[スキップ]price_bufferデータが許容値に未達 {count}")
+                # vcount = count
+            continue
+        else:
+            count = 0
+
+        
+                
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
@@ -1767,7 +2013,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     rsi_ok = False
                 
                 if is_high_volatility(close_prices) == False:
-                    msg = f"[スキップ] {trend} ボラティリティ低のためエントリースキップ"
+                    if trend is None:
+                        msg = f"[スキップ] ボラリティ低のためエントリースキップ"
+                    else:
+                        msg = f"[スキップ] {trend} ボラリティ低のためエントリースキップ"
                     logging.info(msg)
                     notify_slack(msg)
                     continue
@@ -1796,15 +2045,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 shared_state["trend"] = None
                 await asyncio.sleep(interval_sec)
                 continue
-            
-            TREND_HOLD_MINUTES = 15  # 任意の継続時間
-
             now = datetime.now()
-            adjust_max_loss(close_prices)
+            # adjust_max_loss(close_prices)
             trend_active = False
             if is_volatile(close_prices, candles):
                 notify_slack("[フィルター] 乱高下中につき判定スキップ")
                 continue  # トレンド判定処理を一時スキップ
+            
             # ここにDMI判定を追加する
             plus_di, minus_di = calculate_dmi(high_prices, low_prices, close_prices)
             current_plus_di = plus_di[-1]
@@ -1816,38 +2063,18 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 dmi_trend_match = True
             elif trend == "SELL" and current_minus_di > current_plus_di:
                 dmi_trend_match = True
-            
+                      
             logging.info(f"[INFO] DMI TREND {dmi_trend_match}")
 
-            if "trend_start_time" in shared_state:
-                elapsed = (now - shared_state["trend_start_time"]).total_seconds() / 60.0
-                if elapsed < TREND_HOLD_MINUTES:
-                    trend_active = True
-                    if trend != None:
-                        logging.info(f"[継続中] {shared_state['trend']}トレンド継続中 ({elapsed:.1f}分経過)")
-            stc = dynamic_filter(adx, rsi, bid, ask)
-            if stc and trend == "BUY" and (macd_bullish or macd_cross_up) and sma_cross_up and rsi_limit and dmi_trend_match:
-                if is_high_volatility(close_prices):
-                    msg = f"[スキップ] {trend} ボラティリティ高のためエントリースキップ"
-                    logging.info(msg)
-                    notify_slack(msg)
-                    continue  # エントリーしない
-                await process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles)
-            elif stc and trend == "SELL" and (macd_cross_down) and sma_cross_down and rsi > 35 and rsi_limit and dmi_trend_match and statistics.stdev(list(price_buffer)[-5:]) >= 0.007 and statistics.stdev(list(price_buffer)[-20:]) >= 0.010:
-                if is_high_volatility(close_prices):
-                    msg = f"[スキップ] {trend} ボラティリティ高のためエントリースキップ"
-                    logging.info(msg)
-                    notify_slack(msg)
-                    continue  # エントリーしない
-                await process_entry(trend, shared_state, price_buffer, rsi_str,adx_str,candles)
-            elif positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
-                notify_slack(f"[トレンド] トレンド反転 即時損切り")
+            if positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
+                
                 positions = get_positions()
                 prices = get_price()
                 if prices is None:
                     await asyncio.sleep(interval_sec)
                     continue
                 if positions:
+                    notify_slack(f"[トレンド] トレンド反転 即時損切り")
                     ask = prices["ask"]
                     bid = prices["bid"]
 
@@ -1868,6 +2095,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     await asyncio.sleep(interval_sec)
                     continue
                 if positions:
+                    notify_slack(f"[トレンド] トレンド反転 即時損切り")
                     ask = prices["ask"]
                     bid = prices["bid"]
 
@@ -1879,53 +2107,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         close_side = "SELL" if side == "BUY" else "BUY"
                     close_order(pid, size_str, close_side)
                     write_log(close_side, bid)
-            else:
-                    shared_state["trend"] = None
-
-                    ng_reasons = []
-                    if trend == "BUY":
-                        macd_ok = (macd_bullish or macd_cross_up)
-                        sma_ok = sma_cross_up
-                        rsi_ok = (rsi < 70)
-                        dmi_ok = dmi_trend_match
-                        stdev_ok = True  # BUY側はstdev条件なし
-
-                    elif trend == "SELL":
-                        macd_ok = macd_cross_down
-                        sma_ok = sma_cross_down
-                        rsi_ok = (rsi > 35)
-                        dmi_ok = dmi_trend_match
-                        stdev_ok = (short_stdev >= 0.007 and long_stdev >= 0.010)
-
-                    if not macd_ok:
-                        ng_reasons.append("MACD")
-                    if not sma_ok:
-                        ng_reasons.append("SMA")
-                    if not rsi_ok:
-                        ng_reasons.append("RSI")
-                    if not dmi_ok:
-                        ng_reasons.append("DMI")
-                    if trend == "SELL" and not stdev_ok:
-                        ng_reasons.append("ボラ")
-                    if ng_reasons:
-                        notify_message = f"[スキップ] {trend}側 条件未達: {', '.join(ng_reasons)}"
-    
-                        # SHA256計算
-                        hash_digest = hashlib.sha256(notify_message.encode()).hexdigest()
-    
-                        if hash_digest != shared_state.get("last_skip_hash"):
-                            notify_slack(notify_message)
-                            shared_state["last_skip_hash"] = hash_digest
-                        else:
-                            logging.info("[スキップ] 同一理由でスキップ → 通知抑制")
-    
-                        shared_state["trend"] = None
-                    else:
-                        shared_state["last_skip_hash"] = None  # エントリー成功時はリセット
-                        notify_slack(f"[スキップ] {trend}側 条件未達: {', '.join(ng_reasons)}")
-        else:
-            if  (trend is not None) and trend != "BUY" and trend != "SELL":
-                notify_slack(f"[スキップ] trend未定義（不明な分岐）{trend}")
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         
         if shared_state.get("cmd") == "save_adx":
@@ -2022,6 +2203,7 @@ async def auto_trade():
     loss_cut_task = loop.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quick_profit_task = loop.create_task(monitor_quick_profit(shared_state, stop_event))
     
+    
     # エラー通知
     server_task.add_done_callback(lambda t: notify_slack(f"情報保存用サーバが終了しました: {t.exception()}"))
     trend_task.add_done_callback(lambda t: notify_slack(f"トレンド関数が終了しました: {t.exception()}"))
@@ -2032,7 +2214,7 @@ async def auto_trade():
         hold_status_task,
         trend_task,
         loss_cut_task,
-        quick_profit_task
+        quick_profit_task,
         )
     try:
         while True:
@@ -2149,10 +2331,12 @@ async def auto_trade():
             await quick_profit_task
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_quick_profit タスク終了")
+
 if __name__ == "__main__":
     
+    if os_name != "Windows":
     # import_public_key(key_box, public_key_path)
-    verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
+        verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
     try:
         asyncio.run(auto_trade())
     except SystemExit as e:
