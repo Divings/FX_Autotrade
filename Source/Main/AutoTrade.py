@@ -1592,7 +1592,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global candle_buffer
     global price_buffer
     mcv = 0
-    price_buffer = deque(maxlen=240)
+    # price_buffer = deque(maxlen=240)
     global MAX_SPREAD
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
@@ -1646,7 +1646,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 high_prices.clear()
                 low_prices.clear()
                 close_prices.clear()
-                price_buffer.clear()
                 shared_state["price_reset_done"] = True
             continue
         sstop = 0
@@ -1697,7 +1696,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             high_prices.clear()
             low_prices.clear()
             close_prices.clear()
-            price_buffer.clear()
+            
             m = 0
             shared_state["price_reset_done"] = True 
         else:
@@ -1762,7 +1761,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"[時間制限] 東京市場のため取引スキップ")
                     shared_state["vstop_active"] = True
                     shared_state["forced_entry_date"] = False
-                    
+                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
+                        pass
+                    else:
+                        save_price_history(high_prices, low_prices, close_prices)
                 await asyncio.sleep(interval_sec)
                 continue
             else:
@@ -1774,7 +1776,10 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"[時間制限] 欧州/NY市場のため取引スキップ")
                     shared_state["vstop_active"] = True
                     shared_state["forced_entry_date"] = False
-                    
+                    if len(high_prices) < 28 or len(low_prices) < 28 or len(close_prices) < 28:
+                        pass
+                    else:
+                        save_price_history(high_prices, low_prices, close_prices)
                 await asyncio.sleep(interval_sec)
                 continue
             else:
@@ -1832,16 +1837,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             await asyncio.sleep(interval_sec)
             continue
 
-        if rsi is None or len(price_buffer) < 10:
-            if vstop == 0:
-               shared_state["trend"] = None
-               notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
-               logging.warning("[スキップ] RSI/ADXがNone")
-               vstop = 1
-            await asyncio.sleep(interval_sec)
-            continue
         if rsi is None or adx is None:
-            if vstop == 0:
+            if vstop==0:
                shared_state["trend"] = None
                notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
                logging.warning("[スキップ] RSI/ADXがNone")
@@ -1851,8 +1848,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             shared_state["RSI"] = rsi
             vstop = 0
-        if rsi is None:
-            continue
+
         if len(close_prices) < 14:
             logging.info(f"[情報] ADX計算に必要なデータ不足 ({len(close_prices)}/14)")
             if not shared_state.get("adx_wait_notice", False):
@@ -1972,8 +1968,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                             logging.info("[情報] MACDクロス無視してエントリーだが、9時以降なのでスキップ")
                         timestop = 1
         n_nonce = 0
-        #if rsi is None:
-        #    continue
         if rsi < 20:
             notify_slack(f"[RSI下限] RSI={rsi_str} → 反発警戒でスキップ")
             logging.info("[スキップ] RSI下限で警戒")
@@ -2003,6 +1997,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             count = 0
 
+        
+                
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
@@ -2346,8 +2342,8 @@ if __name__ == "__main__":
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
         save_state(shared_state)
-        #save_price_buffer(price_buffer)
+        save_price_buffer(price_buffer)
     except:
         save_state(shared_state)
-        #save_price_buffer(price_buffer)
+        save_price_buffer(price_buffer)
         
