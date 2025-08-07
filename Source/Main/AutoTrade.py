@@ -1851,7 +1851,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             shared_state["RSI"] = rsi
             vstop = 0
-
+        if rsi is None:
+            continue
         if len(close_prices) < 14:
             logging.info(f"[情報] ADX計算に必要なデータ不足 ({len(close_prices)}/14)")
             if not shared_state.get("adx_wait_notice", False):
@@ -1971,8 +1972,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                             logging.info("[情報] MACDクロス無視してエントリーだが、9時以降なのでスキップ")
                         timestop = 1
         n_nonce = 0
-        if rsi is None:
-            continue
+        #if rsi is None:
+        #    continue
         if rsi < 20:
             notify_slack(f"[RSI下限] RSI={rsi_str} → 反発警戒でスキップ")
             logging.info("[スキップ] RSI下限で警戒")
