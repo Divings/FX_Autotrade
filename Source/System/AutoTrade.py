@@ -1832,8 +1832,16 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             await asyncio.sleep(interval_sec)
             continue
 
+        if rsi is None or len(price_buffer) < 10:
+            if vstop == 0:
+               shared_state["trend"] = None
+               notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
+               logging.warning("[スキップ] RSI/ADXがNone")
+               vstop = 1
+            await asyncio.sleep(interval_sec)
+            continue
         if rsi is None or adx is None:
-            if vstop==0:
+            if vstop == 0:
                shared_state["trend"] = None
                notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
                logging.warning("[スキップ] RSI/ADXがNone")
@@ -1963,6 +1971,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                             logging.info("[情報] MACDクロス無視してエントリーだが、9時以降なのでスキップ")
                         timestop = 1
         n_nonce = 0
+        if rso is None:
+            continue
         if rsi < 20:
             notify_slack(f"[RSI下限] RSI={rsi_str} → 反発警戒でスキップ")
             logging.info("[スキップ] RSI下限で警戒")
