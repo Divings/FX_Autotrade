@@ -1525,7 +1525,7 @@ def dynamic_filter(adx, rsi, bid, ask):
 
     return True
 
-def Traring_Stop(adx,max_profits):
+def Traring_Stop(adx, max_profits):
     if adx is not None:
         if adx < 20:
             TRAILING_STOP = 10
@@ -1537,44 +1537,49 @@ def Traring_Stop(adx,max_profits):
         TRAILING_STOP = 15
             
     positions = get_positions()
-    if positions:
-        prices = get_price()
-        ask = prices["ask"]
-        bid = prices["bid"]
+    if not positions:
+        return
 
-        for pos in positions:
-            pid = pos["positionId"]
-            side = pos.get("side", "BUY").upper()
-            entry = float(pos["price"])
-            size = int(pos["size"])
-            elapsed = time.time() - shared_state.get("entry_time", time.time())
-        
-        prices = get_price()
-        ask = prices["ask"]
-        bid = prices["bid"]
-        
-        # 現在利益の計算
-        profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
+    prices = get_price()
+    ask = prices["ask"]
+    bid = prices["bid"]
 
-        # 最大利益の更新
+    for pos in positions:
+        pid = pos["positionId"]
+        side = pos.get("side", "BUY").upper()
+        entry = float(pos["price"])
+        size = int(pos["size"])
+        elapsed = time.time() - shared_state.get("entry_time", time.time())
+
+        # 現在利益の計算（BUYはBID、SELLはASKで決済するのが正しい）
+        if side == "BUY":
+            profit = round((bid - entry) * LOT_SIZE, 2)
+        else:
+            profit = round((entry - ask) * LOT_SIZE, 2)
+
+        # ---- 利益確保型の最大利益更新ロジック ----
         if pid not in max_profits:
-            max_profits[pid] = profit
-        elif profit > max_profits[pid]:
-            max_profits[pid] = profit
-        if profit > 0:
-            logging.info(f"[トレール更新] 建玉{pid} 現在の最大利益更新: {profit}円")
+            # MIN_PROFIT到達で初期化（含み損では初期化しない）
+            if profit >= MIN_PROFIT:
+                max_profits[pid] = profit
+                logging.info(f"[トレール開始] 建玉{pid} 最大利益初期化: {profit}円")
+            else:
+                continue  # トレーリング開始前は何もしない
+        else:
+            # 最大利益を有利方向にだけ更新
+            if profit > max_profits[pid]:
+                max_profits[pid] = profit
+                logging.info(f"[トレール更新] 建玉{pid} 最大利益更新: {profit}円")
 
-            # トレーリングストップ判定
+        # ---- トレーリングストップ判定（利益確保）----
         if profit <= max_profits[pid] - TRAILING_STOP:
             notify_slack(f"[トレーリングストップ] 建玉{pid} 最大利益{max_profits[pid]}円 → 利益確保して決済")
             close_order(pid, size, reverse_side(side))
             record_result(profit, shared_state)
-            # 削除する前に確認
             if pid in max_profits:
                 del max_profits[pid]
 
 first_start = True
-
 
 if USD_TIME == 1:
     if now.hour >= 6 and now.hour <= 16:                   
