@@ -773,7 +773,11 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
         if prices is None:
             await asyncio.sleep(interval_sec)
             continue
-
+        
+        if not positions:
+            await asyncio.sleep(interval_sec)
+            continue
+        
         ask = prices["ask"]
         bid = prices["bid"]
 
@@ -790,8 +794,8 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             # LOT_SIZE = Decimal(str(LOT_SIZE))
 
             # 利益計算
-            raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
-            profit_raws = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            # raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
+            # profit_raws = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
             # profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
@@ -804,11 +808,9 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             if spread > MAX_SPREAD:
                 notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
                 continue
-            try:
-                profit = get_positionLossGain(API_KEY,API_SECRET)
-            except:
-                profit = profit_raws
-
+            
+            profit = get_positionLossGain(API_KEY,API_SECRET)
+            
             if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
                 if spread > MAX_SPREAD:
                     notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
@@ -832,8 +834,8 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 shared_state["trend"] = None
                 shared_state["last_trend"] = None
                 shared_state["entry_time"] = time.time()
-
-        await asyncio.sleep(interval_sec)
+                
+        # await asyncio.sleep(interval_sec)
 
 from load_xml import load_config_from_xml
 

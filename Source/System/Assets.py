@@ -40,8 +40,9 @@ def get_positionLossGain(apiKey,secretKey):
 
     res = requests.get(endPoint + path, headers=headers)
     res_json = json.loads(res.text)
-
+    
+    inz =int(float(res_json["data"]["positionLossGain"]))
     with open("positionLossGain.txt", "a", encoding="utf-8") as f:
-        f.write(int(float(res_json["data"]["positionLossGain"])))
+        f.write(f"{inz}\n")
     return int(float(res_json["data"]["positionLossGain"]))
     # return float(res_json["data"][0]["positionLossGain"])
