@@ -762,6 +762,7 @@ def load_config_from_mysql():
     except Exception as e:
         print(f"⚠️ 設定読み込み失敗（MySQL）：{e}")
         return DEFAULT_CONFIG
+from Assets import get_positionLossGain
 
 # == 損益即時監視用タスク ==
 async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
@@ -790,7 +791,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
 
             # 利益計算
             raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
-            profit = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            profit_raws = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
             # profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
@@ -803,7 +804,11 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             if spread > MAX_SPREAD:
                 notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
                 continue
-            
+            try:
+                profit = get_positionLossGain(API_KEY,API_SECRET)
+            except:
+                profit = profit_raws
+
             if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
                 if spread > MAX_SPREAD:
                     notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
@@ -915,7 +920,6 @@ def adjust_max_loss(prices,
         logging.info(msg)
         notify_slack(msg)
         _PREV_MAX_LOSS = MAX_LOSS
-
 
 import asyncio
 
