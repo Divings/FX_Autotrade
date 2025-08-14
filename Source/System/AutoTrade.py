@@ -809,9 +809,10 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
                 continue
             
-            profit = get_positionLossGain(API_KEY,API_SECRET)
+            profit =  int(float(pos["lossGain"]))
+            #get_positionLossGain(API_KEY,API_SECRET)
             
-            if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
+            if profit <= -MAX_LOSS:
                 if spread > MAX_SPREAD:
                     notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
                     continue
