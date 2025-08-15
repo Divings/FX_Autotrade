@@ -1010,7 +1010,7 @@ def last_balance():
         saved_available_amount = out['data']['availableAmount']
     
     out = assets(API_KEY,API_SECRET)
-    last = round(float(out['data']['availableAmount']) - float(saved_available_amount), 2)
+    last = str(get_positionLossGain(API_KEY,API_SECRET))
     sign1 = hmac.new(SECRET_KEYs, str(last).encode(), hashlib.sha256).hexdigest()
     notify_slack(f"[当日決算損益] 当日決算損益は{last}円です。")
     available_amounts = out['data']['availableAmount'] # 定数を更新
