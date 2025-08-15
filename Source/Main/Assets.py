@@ -44,5 +44,5 @@ def get_positionLossGain(apiKey,secretKey):
     inz =int(float(res_json["data"]["positionLossGain"]))
     with open("positionLossGain.txt", "a", encoding="utf-8") as f:
         f.write(f"{inz}\n")
-    return int(float(res_json["data"]["positionLossGain"]))
+    return float(res_json["data"]["positionLossGain"])
     # return float(res_json["data"][0]["positionLossGain"])

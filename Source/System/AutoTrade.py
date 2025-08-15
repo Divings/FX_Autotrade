@@ -456,6 +456,22 @@ def load_ini():
         reset = False
     return reset
 
+def load_testmode():
+    import os
+    if os.path.exists('config.ini'):
+        # ConfigParser オブジェクトを作成
+        config = configparser.ConfigParser()
+
+        # ファイルを読み込む
+        config.read('config.ini')
+
+        # 値を取得
+        host = config.get('settings', 'TEST_MODE')
+        return int(host)
+    else:
+        return 0
+
+testmode = load_testmode()
 reset = load_ini()
 args=sys.argv
 file_path = sys.argv[0]  # スクリプトファイルのパス
@@ -484,7 +500,7 @@ def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     signal = macd.ewm(span=signal_period).mean()
     return macd.tolist(), signal.tolist()
 
-def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
+def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.005):
     """
     ローソク足リスト（最低2本）から初動を判定（緩め）
     """
@@ -507,6 +523,12 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.003):
 
     # 最低実体サイズチェック
     if body_last < min_body_size:
+        return False, ""
+    
+    if (range_last / body_last) > 4:
+        return False, ""  # ヒゲ比率が高すぎる場合は除外
+    
+    if (body_last / body_prev) < 1.5:
         return False, ""
 
     # 買いの初動
@@ -765,7 +787,7 @@ def load_config_from_mysql():
 from Assets import get_positionLossGain
 
 # == 損益即時監視用タスク ==
-async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
+async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
     SLIPPAGE_BUFFER = 5  # 許容スリッページ（円）
     while not stop_event.is_set():
         positions = get_positions()
@@ -788,9 +810,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             side = pos.get("side", "BUY").upper()
             close_side = "SELL" if side == "BUY" else "BUY"
             
-            ask = Decimal(str(ask))
-            entry = Decimal(str(entry))
-            bid = Decimal(str(bid))
+        
             # LOT_SIZE = Decimal(str(LOT_SIZE))
 
             # 利益計算
@@ -800,6 +820,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
             # profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             # スリッページバッファ込みで早めに判断
+            prices = get_price()
             bid = prices["bid"]
             ask = prices["ask"]
             #mid = (ask + bid) / 2
@@ -809,10 +830,10 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
                 continue
             
-            profit =  int(float(pos["lossGain"]))
+            profit =  float(pos["lossGain"])
             #get_positionLossGain(API_KEY,API_SECRET)
             
-            if profit <= -MAX_LOSS:
+            if profit <= -MAX_LOSS + SLIPPAGE_BUFFER:
                 if spread > MAX_SPREAD:
                     notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
                     continue
@@ -836,7 +857,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=1):
                 shared_state["last_trend"] = None
                 shared_state["entry_time"] = time.time()
                 
-        # await asyncio.sleep(interval_sec)
+        await asyncio.sleep(interval_sec)
 
 from load_xml import load_config_from_xml
 
@@ -2009,8 +2030,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             count = 0
 
-        
-                
         is_initial, direction = is_trend_initial(candles)
         if is_initial:
             # 簡易フィルター
@@ -2036,6 +2055,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
+                    if testmode == 1:                        
+                        notify_slack(f"テストモードのため、エントリースキップ")
+                        continue
                     first_order(direction, shared_state)
                     direction = None
                     is_initial = None
@@ -2211,7 +2233,7 @@ async def auto_trade():
     # 全タスクを登録
     server_task = asyncio.create_task(start_socket_server(shared_state))
     hold_status_task = loop.create_task(monitor_hold_status(shared_state, stop_event, interval_sec=1))
-    trend_task = loop.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=shared_state))
+    trend_task = loop.create_task(monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=2, shared_state=shared_state))
     loss_cut_task = loop.create_task(monitor_positions_fast(shared_state, stop_event, interval_sec=1))
     quick_profit_task = loop.create_task(monitor_quick_profit(shared_state, stop_event))
     
