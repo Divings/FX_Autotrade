@@ -2224,6 +2224,19 @@ trend_none_count = 0
 # === メイン処理 ===
 stop_event = Event()
 
+import traceback
+def handle_task_with_traceback(task_name):
+    def _callback(t):
+        try:
+            exception = t.exception()
+            if exception:
+                tb_str = ''.join(traceback.format_exception(
+                    type(exception), exception, exception.__traceback__))
+                notify_slack(f"【{task_name}】例外が発生しました:\n```{tb_str}```")
+        except Exception as e:
+            notify_slack(f"【{task_name}】コールバック内でさらにエラー: {e}")
+    return _callback
+
 # メイン取引処理
 async def auto_trade():
     global trend_none_count
@@ -2239,9 +2252,10 @@ async def auto_trade():
     
     
     # エラー通知
-    server_task.add_done_callback(lambda t: notify_slack(f"情報保存用サーバが終了しました: {t.exception()}"))
-    trend_task.add_done_callback(lambda t: notify_slack(f"トレンド関数が終了しました: {t.exception()}"))
-    quick_profit_task.add_done_callback(lambda t: notify_slack(f"即時利確関数が終了しました: {t.exception()}"))
+    server_task.add_done_callback(handle_task_with_traceback("情報保存用サーバ"))
+    trend_task.add_done_callback(handle_task_with_traceback("トレンド関数"))
+    quick_profit_task.add_done_callback(handle_task_with_traceback("即時利確関数"))
+    
     # 全てのタスクを待機（終了しない限り常駐）
     await asyncio.gather(
         server_task,
