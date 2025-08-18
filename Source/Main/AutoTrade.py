@@ -528,9 +528,12 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.005):
     if (range_last / body_last) > 4:
         return False, ""  # ヒゲ比率が高すぎる場合は除外
     
-    if (body_last / body_prev) < 1.5:
-        return False, ""
-
+    try:
+        if (body_last / body_prev) < 1.5:
+            return False, ""
+    except:
+        pass
+    
     # 買いの初動
     if (
         last["close"] > prev["high"] and
