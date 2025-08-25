@@ -52,7 +52,9 @@ msg_history = None
 _HASH_FILE = "notification_hash.txt"
 _LOG_FILE  = "notification_log.txt"
 
-def _read_last_hash_from_file(path: str = _HASH_FILE) -> str | None:
+from typing import Optional
+
+def _read_last_hash_from_file(path: str = _HASH_FILE) -> Optional[str]:
     try:
         if not os.path.exists(path):
             return None
