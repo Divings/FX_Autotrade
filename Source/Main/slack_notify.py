@@ -41,16 +41,42 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 # chat_id は未設定なら自動取得し、取得後に .env へ追記してキャッシュする
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# 通知クールダウン（同一メッセージの連投抑止）
+# 連投抑止（クールダウン）
 _last_notify_times = {}
 _NOTIFY_COOLDOWN_SECONDS = 60
+
+# 直近送信メッセージのハッシュ（メモリ）
 msg_history = None
 
+# --- 直近ハッシュの永続化（プロセス再起動後も重複判定可能） ---
+_HASH_FILE = "notification_hash.txt"
+_LOG_FILE  = "notification_log.txt"
+
+def _read_last_hash_from_file(path: str = _HASH_FILE) -> str | None:
+    try:
+        if not os.path.exists(path):
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            line = f.readline().strip()
+            return line or None
+    except Exception:
+        return None
+
+def _write_last_hash_to_file(h: str, path: str = _HASH_FILE):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(h + "\n")
+    except Exception as e:
+        # 保存失敗は致命ではないのでログだけ
+        try:
+            with open(_LOG_FILE, "a", encoding="utf-8") as lf:
+                lf.write(f"[ハッシュ保存失敗] {e}（{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}）\n")
+        except Exception:
+            pass
+# ------------------------------------------------------------
 
 def _append_env_if_needed(key: str, value: str, env_path: str = ".env"):
-    """
-    .env に key=value を追記（既に同じキー行があれば追記しない）
-    """
+    """ .env に key=value を追記（既存キーは上書き、なければ追記） """
     try:
         if not os.path.exists(env_path):
             with open(env_path, "w", encoding="utf-8") as f:
@@ -60,14 +86,12 @@ def _append_env_if_needed(key: str, value: str, env_path: str = ".env"):
         with open(env_path, "r", encoding="utf-8") as f:
             lines = f.read().splitlines()
 
-        # 既存キーの行があれば上書き（なければ追記）
         updated = False
         for i, line in enumerate(lines):
             if line.strip().startswith(f"{key}="):
                 lines[i] = f"{key}={value}"
                 updated = True
                 break
-
         if not updated:
             lines.append(f"{key}={value}")
 
@@ -76,11 +100,8 @@ def _append_env_if_needed(key: str, value: str, env_path: str = ".env"):
     except Exception as e:
         print(f"[ENV書き込み警告] {key} の保存に失敗: {e}")
 
-
 def _message_color_for_slack(message: str) -> str:
-    """
-    元コードの色分けロジックを踏襲
-    """
+    """ 元ロジックの色分け """
     if "[即時損切]" in message or "[決済] 損切り" in message or "[⚠️アラート]" in message:
         return "#ff4d4d"  # 赤
     elif "[決済]" in message or "[即時利確]" in message or "[RSI" in message:
@@ -94,19 +115,13 @@ def _message_color_for_slack(message: str) -> str:
     elif "[INFO]" in message:
         return "#888888"  # グレー
     else:
-        return "#dddddd"  # 既定（薄グレー）
-
+        return "#dddddd"  # 薄グレー
 
 def _get_telegram_chat_id() -> str:
-    """
-    TELEGRAM_CHAT_ID が未設定なら getUpdates で自動取得して .env に保存
-    取得には『Bot に対して /start を送っていること』が前提
-    """
+    """ TELEGRAM_CHAT_ID が未設定なら getUpdates で自動取得して .env に保存 """
     global TELEGRAM_CHAT_ID
-
     if TELEGRAM_CHAT_ID:
         return TELEGRAM_CHAT_ID
-
     if not TELEGRAM_TOKEN:
         raise ValueError("TELEGRAM_TOKEN is not set. .env に TELEGRAM_TOKEN を設定してください。")
 
@@ -117,33 +132,26 @@ def _get_telegram_chat_id() -> str:
     except Exception:
         raise RuntimeError(f"chat_id の取得に失敗しました（JSON 変換不可）: {res.text[:200]}")
 
-    try:
-        # 最新のメッセージのチャットIDを使用
-        results = data.get("result", [])
-        if not results:
-            raise RuntimeError(
-                "getUpdates に結果がありません。Bot に /start を送ってから再実行してください。"
-                "（Webhook 有効時は getUpdates が空になるため、必要なら deleteWebhook を）"
-            )
-        last = results[-1]
-        # メッセージかチャネル投稿か等で構造が異なる場合があるため順に見る
-        chat = None
-        if "message" in last and "chat" in last["message"]:
-            chat = last["message"]["chat"]
-        elif "channel_post" in last and "chat" in last["channel_post"]:
-            chat = last["channel_post"]["chat"]
-        elif "edited_message" in last and "chat" in last["edited_message"]:
-            chat = last["edited_message"]["chat"]
+    results = data.get("result", [])
+    if not results:
+        raise RuntimeError(
+            "getUpdates に結果がありません。Bot に /start を送ってから再実行してください。"
+            "（Webhook 有効時は getUpdates が空になるため、必要なら deleteWebhook を）"
+        )
+    last = results[-1]
+    chat = None
+    if "message" in last and "chat" in last["message"]:
+        chat = last["message"]["chat"]
+    elif "channel_post" in last and "chat" in last["channel_post"]:
+        chat = last["channel_post"]["chat"]
+    elif "edited_message" in last and "chat" in last["edited_message"]:
+        chat = last["edited_message"]["chat"]
+    if not chat or "id" not in chat:
+        raise RuntimeError("getUpdates の応答に chat.id が見つかりません。")
 
-        if not chat or "id" not in chat:
-            raise RuntimeError("getUpdates の応答に chat.id が見つかりません。")
-
-        TELEGRAM_CHAT_ID = str(chat["id"])
-        _append_env_if_needed("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
-        return TELEGRAM_CHAT_ID
-    except Exception as e:
-        raise RuntimeError(f"chat_id の取得に失敗しました: {e}")
-
+    TELEGRAM_CHAT_ID = str(chat["id"])
+    _append_env_if_needed("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
+    return TELEGRAM_CHAT_ID
 
 def _notify_slack_impl(message: str):
     if not SLACK_WEBHOOK_URL:
@@ -154,49 +162,63 @@ def _notify_slack_impl(message: str):
     if response.status_code != 200:
         print(f"[Slack通知失敗] {response.status_code} - {response.text}")
 
-
 def _notify_telegram_impl(message: str):
     chat_id = _get_telegram_chat_id()
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    # シンプルなテキスト送信（必要なら parse_mode='MarkdownV2' 等に）
     payload = {"chat_id": chat_id, "text": message}
     response = requests.post(url, data=payload, timeout=10)
     if response.status_code != 200:
         print(f"[Telegram通知失敗] {response.status_code} - {response.text}")
 
+def _append_log(reason: str, message: str):
+    """ ログファイルに理由＋本文を追記 """
+    ts = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+    try:
+        with open(_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"[{reason}] {ts}\n{message}\n\n")
+    except Exception:
+        pass
 
 def notify_slack(message: str):
     """
     既存互換のエントリポイント。
     config.ini の settings:Setdefault に従って Slack または Telegram へ送信する。
+    直前と同じメッセージは「通知せず」、メッセージ本文を notification_log.txt へ追記。
+    クールダウン抑止時も本文をログへ残す。
     """
     global msg_history
 
-    # 連投抑止（同一メッセージの短時間連投を避け、ログに記録）
     now = time.time()
-    last_sent = _last_notify_times.get(message)
     msg_hash = hashlib.sha256(message.encode()).hexdigest()
 
-    if msg_hash == msg_history or (last_sent and (now - last_sent < _NOTIFY_COOLDOWN_SECONDS)):
-        log_message = f"[通知制限] メッセージ送信抑制: {message}（{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))}）\n"
-        try:
-            with open("notification_log.txt", "a", encoding="utf-8") as f:
-                f.write(log_message)
-        except Exception:
-            pass
+    # 直前と同一か（メモリ or ファイルの記録で判定）
+    file_hash = _read_last_hash_from_file()
+    is_same_as_memory = (msg_hash == msg_history)
+    is_same_as_file = (file_hash is not None and msg_hash == file_hash)
+    if is_same_as_memory or is_same_as_file:
+        _append_log("重複抑止(直前と同一)", message)
         return
+
+    # クールダウン抑止（ハッシュではなくメッセージ文字列で管理）
+    last_sent = _last_notify_times.get(message)
+    if last_sent and (now - last_sent < _NOTIFY_COOLDOWN_SECONDS):
+        _append_log("クールダウン抑止", message)
+        return
+
     _last_notify_times[message] = now
 
-    # Debug モードならメッセージに印を付与
-    if debug:
-        message = "[Debug モード] " + message
+    # Debug モードなら目印を付与（重複判定には影響させないため、この位置で付与）
+    send_text = "[Debug モード] " + message if debug else message
 
     try:
         if str(default_service).lower() == "telegram":
-            _notify_telegram_impl(message)
+            _notify_telegram_impl(send_text)
         else:
-            # 既定は Slack
-            _notify_slack_impl(message)
+            _notify_slack_impl(send_text)
+
+        # 送信成功後に「元メッセージ」のハッシュを更新（Debug 付与前の本文で計算したもの）
         msg_history = msg_hash
+        _write_last_hash_to_file(msg_hash)
+
     except Exception as e:
         print(f"[通知例外] {e}")
