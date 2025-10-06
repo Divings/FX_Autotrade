@@ -1003,6 +1003,8 @@ try:
     available_amounts = out['data']['availableAmount']
     available_amount = int(float(out['data']['availableAmount']))
     notify_slack(f"現在の取引余力は{available_amount}円です。")
+    if available_amount==0 or available_amount==None:
+        notify_slack("警告: 取引余力がありません。\nシステムを停止するか、資金を追加してください")
 except:
     pass
 
