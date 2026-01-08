@@ -115,4 +115,3 @@ def decrypt_file(file_path, password, memo=""):
         f.write(blockchain.to_json().encode('utf-8'))
 
     return output_file
-

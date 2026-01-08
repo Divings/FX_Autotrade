@@ -6,16 +6,6 @@ import os
 import sys
 
 print("")
-#hash = "bf9069ea9e93f786cdc7bc351048b35ed9c0d2d2ab3b2ee26df736c775bd6f23"
-
-#text = input(" コードをSystemディレクトリにコピーするには、管理者コードを入力 >> ")
-
-#Authcode = sha256_hash = hashlib.sha256(text.encode('utf-8')).hexdigest()
-#if hash != Authcode:
-#    print("\n 管理者コードが一致しません ")
-#    input(" >> ")
-#    sys.exit(0)
-    
 Main_dir=os.path.dirname(os.path.abspath(__file__))
 print("")
 def calculate_hash(file_path):
@@ -24,6 +14,8 @@ def calculate_hash(file_path):
         while chunk := f.read(8192):
             sha256.update(chunk)
     return sha256.hexdigest()
+
+print("")
 
 # このスクリプトのパス
 script_dir = Path(__file__).resolve().parent
@@ -64,7 +56,6 @@ import subprocess
 v=input(" リポジトリにプッシュしますか？ (Y or N)>> ")
 if v.lower()=="y":
     print("")
-     
     message=input(" Commit Messagre >> ")
     subprocess.run("git add *")
     subprocess.run(f"git commit -a -m \"{message}\"")
