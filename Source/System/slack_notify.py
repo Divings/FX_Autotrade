@@ -11,6 +11,27 @@ from conf_load import load_settings_from_db
 # .env を読み込む（TELEGRAM_TOKEN / TELEGRAM_CHAT_ID を使うため）
 load_dotenv()
 
+import base64
+from pathlib import Path
+from Crypto.Cipher import AES
+
+KEY_FILE = Path("aes_key.bin")
+
+def load_aes_key():
+    if not KEY_FILE.exists():
+        raise RuntimeError("AESキーが見つかりません (aes_key.bin)")
+    return KEY_FILE.read_bytes()
+
+_AES_KEY = load_aes_key()
+
+def aes_decrypt(token: str) -> str:
+    raw = base64.b64decode(token)
+    nonce = raw[:16]
+    tag = raw[16:32]
+    ciphertext = raw[32:]
+    cipher = AES.new(_AES_KEY, AES.MODE_GCM, nonce=nonce)
+    return cipher.decrypt_and_verify(ciphertext, tag).decode()
+
 def load_config():
     """
     config.ini の settings セクションから debug / Setdefault を読み込み
@@ -32,9 +53,16 @@ def load_config():
 
 debug, default_service = load_config()
 
-# 設定をDBから読み込む（Slack Webhook は DB 側にある前提）
 config1 = load_settings_from_db()
-SLACK_WEBHOOK_URL = config1.get("SLACK_WEBHOOK_URL")
+
+_slack_enc = config1.get("SLACK_WEBHOOK_URL")
+if _slack_enc:
+    try:
+        SLACK_WEBHOOK_URL = aes_decrypt(_slack_enc)
+    except Exception as e:
+        raise RuntimeError("SLACK_WEBHOOK_URL の復号に失敗しました") from e
+else:
+    SLACK_WEBHOOK_URL = None
 
 # Telegram トークン（必須）
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
