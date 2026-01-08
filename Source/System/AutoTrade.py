@@ -54,18 +54,65 @@ SKIP_MINUTES = {
 }
 
 import sqlite3
+from Crypto.Cipher import AES
+import base64
+
+from Crypto.Random import get_random_bytes
+from pathlib import Path
+
+KEY_FILE = Path("aes_key.bin")
+
+def load_or_create_aes_key():
+    if KEY_FILE.exists():
+        return KEY_FILE.read_bytes()
+    key = get_random_bytes(32)
+    KEY_FILE.write_bytes(key)
+    try:
+        KEY_FILE.chmod(0o600)
+    except:
+        pass
+    return key
+
+AES_KEY = load_or_create_aes_key()
+
+def aes_encrypt(text: str) -> str:
+    cipher = AES.new(AES_KEY, AES.MODE_GCM)
+    ciphertext, tag = cipher.encrypt_and_digest(text.encode())
+    return base64.b64encode(cipher.nonce + tag + ciphertext).decode()
+
+
+def aes_decrypt(token: str) -> str:
+    raw = base64.b64decode(token)
+    nonce = raw[:16]
+    tag = raw[16:32]
+    ciphertext = raw[32:]
+    cipher = AES.new(AES_KEY, AES.MODE_GCM, nonce=nonce)
+    return cipher.decrypt_and_verify(ciphertext, tag).decode()
+
+
 def load_api_settings_sqlite(db_path="api_settings.db"):
     """
-    SQLite から API_KEY と API_SECRET を取得して返す
+    SQLite から API_KEY と API_SECRET を取得し、AES復号して返す
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT name, value FROM api_settings WHERE name IN ('API_KEY', 'API_SECRET')")
+    cursor.execute(
+        "SELECT name, value FROM api_settings WHERE name IN ('API_KEY', 'API_SECRET')"
+    )
     rows = dict(cursor.fetchall())
     conn.close()
 
-    api_key = rows.get("API_KEY", "")
-    api_secret = rows.get("API_SECRET", "")
+    api_key_enc = rows.get("API_KEY", "")
+    api_secret_enc = rows.get("API_SECRET", "")
+
+    if not api_key_enc or not api_secret_enc:
+        return "", ""
+
+    try:
+        api_key = aes_decrypt(api_key_enc)
+        api_secret = aes_decrypt(api_secret_enc)
+    except Exception as e:
+        raise RuntimeError("API設定の復号に失敗しました") from e
 
     return api_key, api_secret
 
