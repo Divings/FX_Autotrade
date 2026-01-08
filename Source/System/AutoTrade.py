@@ -607,7 +607,7 @@ notify_slack("自動売買システム起動")
 shared_state = load_state()
 reset_notifications(shared_state)
 if shared_state.get("cmd") == "save_adx":
-    shared_state["cmd"] == None
+    shared_state["cmd"] = None
 
 price_buffer = load_price_buffer()
 
