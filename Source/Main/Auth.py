@@ -11,6 +11,16 @@ PUBLIC_KEY_FILE = "/opt/gpg/publickey.asc"
 UPDATE_FILE = "AutoTrade.py"
 SIGNATURE_FILE = "AutoTrade.py.sig"
 
+# 設定ファイル読み込み関数
+def load_conf():
+    import configparser
+    
+    # 設定ファイル読み込み
+    config = configparser.ConfigParser()
+    config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
+    log_level = config.get("Auth", "enable", fallback=1)# デフォルトは有効(1)
+    return log_level
+
 def download_public_key(url, save_path):
     """公開鍵をダウンロードして保存"""
     try:
@@ -46,10 +56,25 @@ def verify_signature(gpg_home, signature_file, update_file):
     # notify_slack("[INFO] 署名検証成功")
     return 0
 
+# 設定ファイルを読み込み
+mode=load_conf() # 1:有効,0:無効
+
+# モードが無効なら終了(正常起動とする)
+if mode == False:
+    notify_slack("[INFO] 署名検証が無効です。\n処理のカスタマイズが可能です")
+    sys.exit(0)
+
+# 公開鍵ダウンロード・インポート・署名検証
 public_key_path = os.path.join(temp_dir, "publickey.asc")
 download_public_key(PUBLIC_KEY_URL, public_key_path)
+
+# 公開鍵インポート
 import_public_key(temp_dir, public_key_path)
+
+# 署名検証
 out = verify_signature(temp_dir, SIGNATURE_FILE, UPDATE_FILE)
 # if out == 0:
 #    notify_slack("[INFO] 署名検証成功")
+
+# 終了コードを返す
 sys.exit(out)
