@@ -18,7 +18,7 @@ def load_conf():
     # 設定ファイル読み込み
     config = configparser.ConfigParser()
     config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
-    log_level = config.get("Auth", "enable", fallback=1)# デフォルトは有効(1)
+    log_level = config.getint("Auth", "enable", fallback=1)# デフォルトは有効(1)
     return log_level
 
 def download_public_key(url, save_path):
@@ -58,7 +58,7 @@ def verify_signature(gpg_home, signature_file, update_file):
 
 # 設定ファイルを読み込み
 mode=load_conf() # 1:有効,0:無効
-
+print(mode)
 # モードが無効なら終了(正常起動とする)
 if mode == 0:
     notify_slack("[INFO] 署名検証が無効です。\n処理のカスタマイズが可能です")
