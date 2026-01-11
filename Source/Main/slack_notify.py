@@ -17,6 +17,7 @@ from Crypto.Cipher import AES
 
 KEY_FILE = Path("aes_key.bin")
 
+# AESキーをファイルから読み込む
 def load_aes_key():
     if not KEY_FILE.exists():
         raise RuntimeError("AESキーが見つかりません (aes_key.bin)")
@@ -24,6 +25,7 @@ def load_aes_key():
 
 _AES_KEY = load_aes_key()
 
+# AES-GCM で復号
 def aes_decrypt(token: str) -> str:
     raw = base64.b64decode(token)
     nonce = raw[:16]
@@ -32,6 +34,7 @@ def aes_decrypt(token: str) -> str:
     cipher = AES.new(_AES_KEY, AES.MODE_GCM, nonce=nonce)
     return cipher.decrypt_and_verify(ciphertext, tag).decode()
 
+# 設定読み込み
 def load_config():
     """
     config.ini の settings セクションから debug / Setdefault を読み込み
@@ -53,9 +56,13 @@ def load_config():
 
 debug, default_service = load_config()
 
+# Slack Webhook URL（暗号化済み）
 config1 = load_settings_from_db()
 
+# Slack Webhook URL の復号
 _slack_enc = config1.get("SLACK_WEBHOOK_URL")
+
+# 復号処理
 if _slack_enc:
     try:
         SLACK_WEBHOOK_URL = aes_decrypt(_slack_enc)
@@ -82,6 +89,7 @@ _LOG_FILE  = "notification_log.txt"
 
 from typing import Optional
 
+# ハッシュファイルから直近ハッシュを読み込み
 def _read_last_hash_from_file(path: str = _HASH_FILE) -> Optional[str]:
     try:
         if not os.path.exists(path):
@@ -92,6 +100,7 @@ def _read_last_hash_from_file(path: str = _HASH_FILE) -> Optional[str]:
     except Exception:
         return None
 
+# ハッシュファイルへ直近ハッシュを書き込み
 def _write_last_hash_to_file(h: str, path: str = _HASH_FILE):
     try:
         with open(path, "w", encoding="utf-8") as f:
@@ -105,6 +114,7 @@ def _write_last_hash_to_file(h: str, path: str = _HASH_FILE):
             pass
 # ------------------------------------------------------------
 
+# .env へ key=value を追記（既存キーは上書き、なければ追記）
 def _append_env_if_needed(key: str, value: str, env_path: str = ".env"):
     """ .env に key=value を追記（既存キーは上書き、なければ追記） """
     try:
@@ -130,6 +140,7 @@ def _append_env_if_needed(key: str, value: str, env_path: str = ".env"):
     except Exception as e:
         print(f"[ENV書き込み警告] {key} の保存に失敗: {e}")
 
+# メッセージに応じた色分け
 def _message_color_for_slack(message: str) -> str:
     """ 元ロジックの色分け """
     if "[即時損切]" in message or "[決済] 損切り" in message or "[⚠️アラート]" in message:
@@ -147,6 +158,7 @@ def _message_color_for_slack(message: str) -> str:
     else:
         return "#dddddd"  # 薄グレー
 
+# Telegram chat_id を取得・保存
 def _get_telegram_chat_id() -> str:
     """ TELEGRAM_CHAT_ID が未設定なら getUpdates で自動取得して .env に保存 """
     global TELEGRAM_CHAT_ID
@@ -183,6 +195,7 @@ def _get_telegram_chat_id() -> str:
     _append_env_if_needed("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
     return TELEGRAM_CHAT_ID
 
+# Slack 通知実装
 def _notify_slack_impl(message: str):
     if not SLACK_WEBHOOK_URL:
         raise ValueError("SLACK_WEBHOOK_URL is not set.")
@@ -192,6 +205,7 @@ def _notify_slack_impl(message: str):
     if response.status_code != 200:
         print(f"[Slack通知失敗] {response.status_code} - {response.text}")
 
+# Telegram 通知実装
 def _notify_telegram_impl(message: str):
     chat_id = _get_telegram_chat_id()
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -200,6 +214,7 @@ def _notify_telegram_impl(message: str):
     if response.status_code != 200:
         print(f"[Telegram通知失敗] {response.status_code} - {response.text}")
 
+# ログファイル追記
 def _append_log(reason: str, message: str):
     """ ログファイルに理由＋本文を追記 """
     ts = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
@@ -209,6 +224,7 @@ def _append_log(reason: str, message: str):
     except Exception:
         pass
 
+# 既存互換のエントリポイント
 def notify_slack(message: str):
     """
     既存互換のエントリポイント。

@@ -4,7 +4,7 @@ import pickle
 from datetime import datetime, timedelta
 from collections import deque
 
-
+# --- 定数 ---
 STATE_FILE = "shared_state.json"
 BUFFER_FILE = "price_buffer.pkl"
 BUFFER_MAXLEN = 240  # 12分相当
@@ -16,6 +16,7 @@ def save_state(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f)
 
+# --- バッファ保存 ---
 def save_price_buffer(buffer):
     with open(BUFFER_FILE, "wb") as f:
         pickle.dump(list(buffer), f)
@@ -33,6 +34,7 @@ def load_state():
     except:
         return {"trend_init_notice": False}
 
+# --- バッファ読み込み ---
 def load_price_buffer():
     try:
         with open(BUFFER_FILE, "rb") as f:
@@ -43,6 +45,7 @@ def load_price_buffer():
 
 import json
 
+# --- ADX用価格履歴保存 ---
 def save_price_history(highs, lows, closes, filename="adx_history.json"):
     with open(filename, "w") as f:
         json.dump({
@@ -54,6 +57,7 @@ def save_price_history(highs, lows, closes, filename="adx_history.json"):
 from collections import deque
 import os
 
+# --- ADX用価格履歴読み込み ---
 def load_price_history(filename="adx_history.json", maxlen=240):
     highs = deque(maxlen=maxlen)
     lows = deque(maxlen=maxlen)

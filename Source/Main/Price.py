@@ -1,4 +1,6 @@
 import logging
+
+# 価格情報をレスポンスから抽出する関数
 def extract_price_from_response(res):
     try:
         data = res.json()

@@ -1,6 +1,6 @@
-# Copyright (c) 2025 Innovation Craft Inc. All Rights Reserved.
-# 本ソフトウェアは Innovation Craft Inc. のプロプライエタリライセンスに基づいて提供されています。
-# 本ソフトウェアの使用、複製、改変、再配布には Innovation Craft Inc. の事前の書面による許可が必要です。
+# Copyright (c) 2025 合同会社Anvelk Innovations All Rights Reserved.
+# 本ソフトウェアは 合同会社Anvelk Innovations のプロプライエタリライセンスに基づいて提供されています。
+# 本ソフトウェアの使用、複製、改変、再配布には 合同会社Anvelk Innovations の事前の書面による許可が必要です。
 
 import os
 import hmac
@@ -75,12 +75,13 @@ def load_or_create_aes_key():
 
 AES_KEY = load_or_create_aes_key()
 
+# AES暗号化・復号化関数
 def aes_encrypt(text: str) -> str:
     cipher = AES.new(AES_KEY, AES.MODE_GCM)
     ciphertext, tag = cipher.encrypt_and_digest(text.encode())
     return base64.b64encode(cipher.nonce + tag + ciphertext).decode()
 
-
+# AES復号化関数
 def aes_decrypt(token: str) -> str:
     raw = base64.b64decode(token)
     nonce = raw[:16]
@@ -89,7 +90,7 @@ def aes_decrypt(token: str) -> str:
     cipher = AES.new(AES_KEY, AES.MODE_GCM, nonce=nonce)
     return cipher.decrypt_and_verify(ciphertext, tag).decode()
 
-
+# SQLite から API_KEY と API_SECRET を取得し、AES復号して返す
 def load_api_settings_sqlite(db_path="api_settings.db"):
     """
     SQLite から API_KEY と API_SECRET を取得し、AES復号して返す
@@ -116,6 +117,7 @@ def load_api_settings_sqlite(db_path="api_settings.db"):
 
     return api_key, api_secret
 
+# グローバル変数として読み込み
 def fetch_usdjpy_economic_events():
     url = "https://jp.investing.com/economic-calendar/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -193,6 +195,7 @@ SYS_VER = "73.0.0"
 
 import numpy as np
 
+# prices から直近 n 本のローソク足を構築
 def build_last_n_candles_from_prices(prices: list[float], n: int = 20) -> list[dict]:
     """
     prices から直近 n 本のローソク足を構築
@@ -226,6 +229,8 @@ def build_last_n_candles_from_prices(prices: list[float], n: int = 20) -> list[d
 
     return candles
 
+
+# 価格バッファから指定期間の高低差を計算
 def calculate_range(price_buffer, period=10):
     candles = build_last_n_candles_from_prices(list(price_buffer), n=period)
 
@@ -239,6 +244,7 @@ def calculate_range(price_buffer, period=10):
 
     return max(highs) - min(lows)
 
+# DMI（ADX）を計算する関数
 def calculate_dmi(highs, lows, closes, period=14):
     highs = np.array(highs)
     lows = np.array(lows)
@@ -272,6 +278,7 @@ import statistics
 
 import platform
 
+# ボラティリティ判定関数
 def is_volatile(prices, candles, period=5):
     import statistics
     from collections import deque
@@ -323,6 +330,7 @@ def is_volatile(prices, candles, period=5):
 
     return False  # 安定
 
+# ファイルを2つダウンロードする関数
 def download_two_files(base_url, download_dir):
     filenames = ["API.txt.vdec", "SECRET.txt.vdec"]
     
@@ -349,6 +357,7 @@ from Crypto.Protocol.KDF import PBKDF2
 
 BLOCKCHAIN_HEADER = b'BLOCKCHAIN_DATA_START\n'
 
+# README書き込み関数
 def write_README(temp_dir,path,message):
     if path!=None:
         save_dir = temp_dir + path +"README.txt"
@@ -445,6 +454,7 @@ def load_api(temp_dir):
 
     return api_data, secret_data
 
+# 共有状態の初期化
 shared_state = {
     "trend": None,
     "last_trend": None,
@@ -492,6 +502,8 @@ def reset_notifications(shared_state: dict):
 reset_notifications(shared_state)
 
 import configparser
+
+# iniファイル読み込み関数
 def load_ini():
     try:
         # ConfigParser オブジェクトを作成
@@ -503,6 +515,7 @@ def load_ini():
         reset = False
     return reset
 
+# testmode読み込み関数
 def load_testmode():
     import os
     if os.path.exists('config.ini'):
@@ -518,6 +531,7 @@ def load_testmode():
     else:
         return 0
 
+# メイン処理開始
 testmode = load_testmode()
 reset = load_ini()
 args=sys.argv
@@ -532,12 +546,13 @@ os.makedirs(temp_dir + "/" + "log", exist_ok=True)
 key_box = tempfile.mkdtemp()
 session = requests.Session() # セッションを生成
 
-txt_message="このシステムはInnovation Craft Inc.の所有物です。\n正規の手段、手順以外で得たコードを使用した場合、法的措置の対象となる場合があります。\n\n"
+txt_message="このシステムは合同会社Anvelk Innovationsの所有物です。\n正規の手段、手順以外で得たコードを使用した場合、法的措置の対象となる場合があります。\n\n"
 write_README(temp_dir,"/log/",txt_message)
 write_README(temp_dir,None,txt_message)
 TEST = False # デバッグ用フラグ
 spread_history = deque(maxlen=5)
 
+# MACD計算関数
 def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     #MACDとシグナルラインを返す
     close_series = pd.Series(close_prices)
@@ -547,6 +562,7 @@ def calc_macd(close_prices, short_period=12, long_period=26, signal_period=9):
     signal = macd.ewm(span=signal_period).mean()
     return macd.tolist(), signal.tolist()
 
+# 初動判定関数
 def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.005):
     """
     ローソク足リスト（最低2本）から初動を判定（緩め）
@@ -617,12 +633,14 @@ with open(f"last_temp/last_temp.txt", "w", encoding="utf-8") as f:
     f.write(temp_dir)
     f.write("\n")
 
+# OS判定
 import platform
 os_name = platform.system()
 
 if os_name=="Windows":
     print(temp_dir)
 
+# ログ設定関数
 def setup_logging():
     """初期ログ設定（起動時）"""
     handler = TimedRotatingFileHandler(
@@ -662,6 +680,7 @@ price_buffer = load_price_buffer()
 LOSS_STREAK_THRESHOLD = 3
 COOLDOWN_DURATION_SEC = 180  # 3分間
 
+# デフォルト設定値
 DEFAULT_CONFIG = {
     "LOT_SIZE": 1000,
     "MAX_SPREAD": 0.03,
@@ -681,6 +700,7 @@ DEFAULT_CONFIG = {
 macd_valid = False
 macd_reason = ""
 
+# 連敗記録関数
 def record_result(profit, shared_state):
     if profit < 0:
         shared_state["loss_streak"] = shared_state.get("loss_streak", 0) + 1
@@ -690,13 +710,16 @@ def record_result(profit, shared_state):
     else:
         shared_state["loss_streak"] = 0  # 勝てばリセット
 
+# クールダウン中かどうか判定
 def is_in_cooldown(shared_state):
     cooldown_until = shared_state.get("cooldown_until", 0)
     return time.time() < cooldown_until, max(0, int(cooldown_until - time.time()))
 
+# 逆サイド取得関数
 def reverse_side(side: str) -> str:
     return "SELL" if side.upper() == "BUY" else "BUY"
 
+# == 建玉保有状況監視タスク ==
 async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
     last_notified = {}  # 建玉ごとの通知済みprofit記録
 
@@ -741,6 +764,7 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
                     last_notified[pid] = profit
         await asyncio.sleep(interval_sec)
 
+# エントリースキップ判定関数
 def should_skip_entry(candles, direction: str, recent_resistance=None, recent_support=None, atr=None, min_atr=0.05):
     """
     BUY or SELL エントリー直前にスキップすべきかどうかを判定する関数
@@ -801,6 +825,7 @@ def should_skip_entry(candles, direction: str, recent_resistance=None, recent_su
 
     return False, ""
 
+# MySQLから設定を読み込む関数
 def load_config_from_mysql():
     try:
         conn = mysql.connector.connect(
@@ -860,7 +885,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
             side = pos.get("side", "BUY").upper()
             close_side = "SELL" if side == "BUY" else "BUY"
             
-        
+            # Decimal 利用時のコード（コメントアウト中）
             # LOT_SIZE = Decimal(str(LOT_SIZE))
 
             # 利益計算
@@ -873,6 +898,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
             prices = get_price()
             bid = prices["bid"]
             ask = prices["ask"]
+
             #mid = (ask + bid) / 2
 
             spread = ask - bid
@@ -883,6 +909,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
             profit =  float(pos["lossGain"])
             #get_positionLossGain(API_KEY,API_SECRET)
             
+            # 即時損切判定
             if profit <= -MAX_LOSS + SLIPPAGE_BUFFER:
                 if spread > MAX_SPREAD:
                     notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
@@ -911,6 +938,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
 
 from load_xml import load_config_from_xml
 
+# 設定読み込み
 import os
 if os.path.exists("bot_config.xml"):
     config = load_config_from_xml("bot_config.xml")
@@ -921,6 +949,7 @@ else:
     load_config_status = "設定ソース:Mysql"
 #print(load_config_status)
     
+# グローバル変数に設定値を適用
 SYMBOL = config["SYMBOL"]
 LOT_SIZE = config["LOT_SIZE"]
 MAX_SPREAD = config["MAX_SPREAD"]
@@ -935,10 +964,12 @@ SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップする�
 USD_TIME = config["USD_TIME"]
 MAX_Stop = config["MAX_Stop"]
 
+# 夜間判定関数
 def is_night_time():
     now = datetime.now().hour
     return (16 <= now <= 23) or (0 <= now <= 2)
 
+# 高ボラティリティ判定関数
 def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     # deque, list, tuple のいずれかか確認
     if not isinstance(prices, (list, tuple, deque)) or len(prices) < 2:
@@ -953,10 +984,12 @@ def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     except statistics.StatisticsError:
         return False
 
+# ボラティリティに応じたMAX_LOSS調整関数
 import copy
 Buffer = copy.copy(MAX_LOSS)
 _PREV_MAX_LOSS = None
 
+# ボラティリティに応じたMAX_LOSS調整関数
 def adjust_max_loss(prices,
                     base_loss=50,
                     vol_thresholds=(0.005, 0.01),
@@ -997,6 +1030,7 @@ def adjust_max_loss(prices,
 
 import asyncio
 
+# 指標時間帯判定関数
 def is_event_active():
     """
     今が指標時間帯かどうか判定する
@@ -1017,6 +1051,7 @@ def is_event_active():
             return True
     return False
 
+# SIGTERMハンドラ
 def handle_exit(signum, frame):
     print("SIGTERM 受信 → 状態保存")
     save_state(shared_state)
@@ -1040,11 +1075,13 @@ with open(save_dir, "w", encoding="utf-8") as f:
     f.write("\n")
     f. write(Data_source)
 
+# APIキーとシークレットキーの設定
 API_KEY = api_data.strip()
 API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
+# === 取引余力確認と初期残高保存 ===
 out = assets(API_KEY,API_SECRET)
 try:
     available_amounts = out['data']['availableAmount']
@@ -1055,6 +1092,7 @@ try:
 except:
     pass
 
+# 初期残高ファイルがなければ作成
 if os.path.isfile("pricesData.txt") == False and now.hour>=1:
     with open("pricesData.txt", "w", encoding="utf-8") as f:
         f.write(available_amounts)
@@ -1067,6 +1105,7 @@ else:
             logging.error("基準初期残高読み込み時にエラー")
             saved_available_amount = out['data']['availableAmount']
 
+# == 当日決算損益記録関数 ==
 from AddData import insert_data
 def last_balance():
     SECRET_KEYs = os.getenv("SECRET_PASSWORD").encode()
@@ -1114,6 +1153,7 @@ PUBLIC_KEY_FILE = "/opt/gpg/publickey.asc"
 UPDATE_FILE = "AutoTrade.py"
 SIGNATURE_FILE = "AutoTrade.py.sig"
 
+# 公開鍵ダウンロード関数
 def download_public_key(url, save_path):
     """公開鍵をダウンロードして保存"""
     try:
@@ -1126,6 +1166,7 @@ def download_public_key(url, save_path):
         notify_slack(f"公開鍵ダウンロード失敗: {str(e)}")
         sys.exit(1)
 
+# 公開鍵インポート関数
 def import_public_key(gpg_home, key_path):
     """公開鍵をGPGにインポート"""
     try:
@@ -1135,6 +1176,7 @@ def import_public_key(gpg_home, key_path):
         notify_slack("公開鍵インポート失敗")
         sys.exit(1)
 
+# 署名検証関数
 def verify_signature(gpg_home, signature_file, update_file):
     """署名検証"""
     result = subprocess.run(
@@ -1148,6 +1190,7 @@ def verify_signature(gpg_home, signature_file, update_file):
         sys.exit(1)
     # notify_slack("[INFO] 署名検証成功")
 
+# 取引余力通知関数
 def notify_asset():
     out=assets(API_KEY,API_SECRET)
     available_amount = int(float(out['data']['availableAmount']))
@@ -1323,6 +1366,7 @@ def get_margin_status(shared_state):
     except Exception as e:
         notify_slack(f"[証拠金] 取得失敗: {e}")
 
+# === レスポンスから価格抽出 ===
 def fee_test(trend):
     """ 
     手数料から約定金額を算出するコード
@@ -1462,6 +1506,7 @@ def close_order(position_id, size, side):
         notify_slack(f"[決済] 失敗: {e}")
         return None
 
+# === 初回注文関数 ===
 def first_order(trend,shared_state=None):
     # now = datetime.now()
     global rootOrderIds
@@ -1500,6 +1545,7 @@ def first_order(trend,shared_state=None):
     else:
         return 2
 
+# === フェイルセーフ決済関数 ===
 def failSafe():
     """もし終了前に建玉があった時用"""
     positions = get_positions()
@@ -1518,6 +1564,7 @@ def failSafe():
         print("強制決済建玉なし")
         return 0
     
+# === 直近2本のローソク足構築関数 ===
 def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
     """
     price_buffer（1秒〜数秒おきの価格履歴）から直近2本のローソク足を構築
@@ -1544,6 +1591,7 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
 
     return candles
 
+#=== エントリー判定関数 ===
 async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candles):
     shared_state["trend"] = trend
     shared_state["trend_start_time"] = datetime.now()
@@ -1572,6 +1620,7 @@ async def process_entry(trend, shared_state, price_buffer,rsi_str,adx_str,candle
             logging.error(f"[結果] {trend} 失敗")
         logging.info(f"[エントリー判定] {trend} トレンド確定")
 
+# === 動的フィルタリング関数 ===
 def dynamic_filter(adx, rsi, bid, ask):
     now = datetime.now()
     hour = now.hour
@@ -1605,6 +1654,7 @@ def dynamic_filter(adx, rsi, bid, ask):
 
     return True
 
+# === トレーリングストップ関数 ===
 def Traring_Stop(adx, max_profits):
     if adx is not None:
         if adx < 20:
@@ -1659,12 +1709,16 @@ def Traring_Stop(adx, max_profits):
             if pid in max_profits:
                 del max_profits[pid]
 
+# === メイン監視ループ ===
 first_start = True
 
+# 東京市場時間帯取引スキップ設定
 if USD_TIME == 1:
     if now.hour >= 6 and now.hour <= 16:                   
         logging.info(f"[時間制限] 東京市場のため取引スキップ")
+
 candle_buffer = []
+
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     import statistics
@@ -2076,7 +2130,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             count = 0
 
-        is_initial, direction = is_trend_initial(candles)
+        # 初動検出
+        is_initial, direction = is_trend_initial(candles) # 初動検出関数の呼び出し
         if is_initial:
             # 簡易フィルター
             positions = get_positions()
@@ -2089,6 +2144,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if direction == "SELL" and rsi <= 30:
                     rsi_ok = False
                 
+                # ボラリティフィルター
                 if is_high_volatility(close_prices) == False:
                     if trend is None:
                         msg = f"[スキップ] ボラリティ低のためエントリースキップ"
@@ -2098,11 +2154,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     notify_slack(msg)
                     continue
 
+                # エントリー条件判定
                 if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
                     if testmode == 1:                        
-                        notify_slack(f"テストモードのため、エントリースキップ")
+                        notify_slack(f"テストモードのため、エントリースキップ")# ログ出力のみ
                         continue
                     first_order(direction, shared_state)
                     direction = None
@@ -2146,6 +2203,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                       
             logging.info(f"[INFO] DMI TREND {dmi_trend_match}")
 
+            #反転時の即時損切り判定
             if positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
                 
                 positions = get_positions()
@@ -2166,7 +2224,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         close_side = "SELL" if side == "BUY" else "BUY"
                     close_order(pid, size_str, close_side)
                     write_log(close_side, bid)
-                    
             elif positions and trend == "BUY" and macd_cross_down:
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
                 positions = get_positions()
@@ -2210,6 +2267,7 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
         ask = prices["ask"]
         bid = prices["bid"]
 
+        # 即時利確判定ループ
         for pos in positions:
             entry = float(pos["price"])
             pid = pos["positionId"]
@@ -2426,6 +2484,7 @@ async def auto_trade():
         except asyncio.CancelledError:
             notify_slack("[INFO] monitor_quick_profit タスク終了")
 
+#=== エントリーポイント ===
 if __name__ == "__main__":
     
     if os_name != "Windows":

@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
 
+# XMLファイルからbot_configテーブルの設定を読み込み、辞書として返す関数
 def load_config_from_xml(xml_path: str) -> dict:
     tree = ET.parse(xml_path)
     root = tree.getroot()

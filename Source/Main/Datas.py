@@ -3,6 +3,7 @@ import time
 import datetime
 import os
 
+# 保存先ディレクトリをlast_temp.txtから取得する関数
 def read_temp_dir(filepath="last_temp/last_temp.txt"):
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -11,6 +12,7 @@ def read_temp_dir(filepath="last_temp/last_temp.txt"):
     print(f"取得した保存先: {temp_dir}")
     return temp_dir
 
+# 市場が開いているか確認する関数
 def is_market_open():
     try:
         response = requests.get(f"https://forex-api.coin.z.com/public/v1/status")
@@ -21,6 +23,7 @@ def is_market_open():
     except Exception as e:
         return False
 
+# 為替価格データを定期的に取得し、CSVに保存する関数
 def record_price_data(symbol="USD_JPY", interval_sec=1):
     api_url = "https://forex-api.coin.z.com/public/v1/ticker"
     

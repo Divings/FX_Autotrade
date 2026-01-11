@@ -9,6 +9,7 @@ load_dotenv()  # .envを読み込み
 
 VALID_TOKEN = os.getenv("VALID_TOKEN", "default-token")
 
+# クライアント接続を処理する非同期関数
 async def handle_client(reader, writer,shared_state=None):
     try:
         data = await reader.read(100)
@@ -28,6 +29,7 @@ async def handle_client(reader, writer,shared_state=None):
     except Exception as e:
         logging.error(f"[エラー] handle_client: {e}")
 
+# 非同期ソケットサーバーを開始する関数
 async def start_socket_server(shared_state, host='127.0.0.1', port=8888):
     async def handler(reader, writer):
         await handle_client(reader, writer, shared_state)
