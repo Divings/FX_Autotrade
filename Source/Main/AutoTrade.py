@@ -2,6 +2,7 @@
 # 本ソフトウェアは 合同会社Anvelk Innovations のプロプライエタリライセンスに基づいて提供されています。
 # 本ソフトウェアの使用、複製、改変、再配布には 合同会社Anvelk Innovations の事前の書面による許可が必要です。
 
+from Add_Amount import *
 import os
 import hmac
 import hashlib
@@ -46,6 +47,9 @@ events_df = pd.DataFrame(columns=["datetime", "impact_level", "event"])
 skip_until = None
 
 value = load_weekconfigs()
+
+# データベース初期化
+init_db()
 
 SKIP_MINUTES = {
     "高": 40,
@@ -697,6 +701,7 @@ DEFAULT_CONFIG = {
     "MAX_Stop":30
 }
 
+# グローバル変数初期化
 macd_valid = False
 macd_reason = ""
 
@@ -1091,6 +1096,16 @@ try:
         notify_slack("警告: 取引余力がありません。\nシステムを停止するか、資金を追加してください")
 except:
     pass
+
+# == 週次残高記録関数 ==
+def add_data_SQL():
+    out = assets(API_KEY,API_SECRET)
+    try:
+        available_amounts = out['data']['availableAmount']
+        available_amount = int(float(out['data']['availableAmount']))
+        register_weekly_balance(available_amount)
+    except:
+        pass
 
 # 初期残高ファイルがなければ作成
 if os.path.isfile("pricesData.txt") == False and now.hour>=1:
@@ -2379,6 +2394,7 @@ async def auto_trade():
             else:
                 vstop = 0
             get_margin_status(shared_state)
+            add_data_SQL()
             positions = get_positions()
             prices = get_price()
             if prices is None:
