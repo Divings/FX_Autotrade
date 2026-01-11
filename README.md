@@ -2,6 +2,7 @@
 
 このリポジトリは、GMOコインの外国為替（FX）APIを用いた自動売買プログラムを提供します。
 主に USD/JPY を対象とし、移動平均線を使ったトレンド判定および損益基準による自動売買を行います。
+※ 本リポジトリはオープンソースソフトウェアではありません。
 
 ## 📁 フォルダ構成
 
@@ -21,18 +22,26 @@ Source
 - 自動エントリー・利確・損切り
 - 証拠金維持率チェックとアラート
 - ログ・CSV出力によるトレード履歴の記録
+- 一度実行すると、ほぼ放置で動作可能
+- config.iniに設定を追加すると、処理のカスタムが可能です。
+
+## ⚙　config.ini
+
+ [Auth]
+ enable = 0
+ (enableを0にした場合は、Auth.py経由の起動時に署名検証が回避されます)
 
 ## 🔧 必要な環境
 
 - Python 3.8 以上
-- `.env` ファイルに APIキーの設定が必要
+- `.env` ファイルに APIキーの設定が必要(Setup.pyを実行することで、セットアップの実行が可能)
 - Windows/Linux/macOS 対応
 
 ### インストール方法
 
 ```bash
-git clone https://github.com/your-username/your-repo.git
-cd your-repo/Source/Main
+git clone https://github.com/Divings/FX_Autotrade.git
+cd FX_Autotrade/Source/System
 pip install -r requirements.txt
 ```
 
@@ -46,6 +55,7 @@ API_SECRET=あなたのAPIシークレット
 ## 📈 ロジック概要
 
 ### 売買条件
+(デフォルト設定の場合)
 - 保有ポジションがない場合：
   - 移動平均差で `BUY` or `SELL` を判断
   - トレンドが不明な場合は2回連続でBUYを強行
@@ -68,7 +78,19 @@ API_SECRET=あなたのAPIシークレット
 - 本ツールは実際の資金を使った売買を行います。必ず十分なテストと理解を持ってご使用ください。
 - テスト用途ではデモAPIがないため、実環境APIキーを使用する必要があります。
 - 実行中は Ctrl+C で停止してください。
-- このコードの不正な利用に伴う資金的な損失等、Innovation Craft Inc.は補償しませんのでご注意ください
+- 本ソフトウェア（利用者による改変を含みます）の使用または使用不能により、生じたいかなる損害についても、合同会社Anvelk Innovations は一切の責任を負いません。
+- このコードは、Oracle Linux前提で構築されています。Windowsなどで実行する場合は作業ディレクトリなどを変更してください。
 
 ## 📄 ライセンス
-This software is currently provided under a proprietary license. The previous version was under the MIT license, but all versions after April 12, 2025, will have restrictions on commercial use, redistribution, and modification.
+
+本ソフトウェアはプロプライエタリライセンスのもとで提供されています。
+
+学習および閲覧目的に限りソースコードの参照を許可します。
+利用者自身が私的に使用する目的に限り、改変を許可します。
+
+ただし、改変の有無を問わず、本ソフトウェアおよびその一部を
+第三者に対して再配布、公開、販売、共有、再ライセンスすること、
+ならびに本ソフトウェアを利用して新たなソフトウェアや派生物を作成し
+第三者に提供する行為は禁止されています。
+
+詳細は EULA および LICENSE ファイルを参照してください。
