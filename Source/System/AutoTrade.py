@@ -1981,7 +1981,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if adx >= 95:
             # 無効化（非常事態）
             shared_state["trend"] = None
-            notify_slack(f"[警告] ADXが100に近いためスキップ（ADX={adx:.2f}）")
+            notify_slack(f"[警告] ADXが100に近いためスキップ")
             logging.warning("[スキップ] ADX異常値 → 判定中止")
             continue
         elif adx >= 70 and abs(diff) > 0.015 and trend is not None and (now.hour > 5 and now.hour < 9):
@@ -2025,7 +2025,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         timestop = 1
         n_nonce = 0
         if rsi < 20:
-            notify_slack(f"[RSI下限] RSI={rsi_str} → 反発警戒でスキップ")
+            notify_slack(f"[RSI下限] RSI 警戒でスキップ")
             logging.info("[スキップ] RSI下限で警戒")
             await asyncio.sleep(interval_sec)
             continue
