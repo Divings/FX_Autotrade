@@ -1097,16 +1097,6 @@ try:
 except:
     pass
 
-# == 週次残高記録関数 ==
-def add_data_SQL():
-    out = assets(API_KEY,API_SECRET)
-    try:
-        available_amounts = out['data']['availableAmount']
-        available_amount = int(float(out['data']['availableAmount']))
-        register_weekly_balance(available_amount)
-    except:
-        pass
-
 # 初期残高ファイルがなければ作成
 if os.path.isfile("pricesData.txt") == False and now.hour>=1:
     with open("pricesData.txt", "w", encoding="utf-8") as f:
@@ -2394,7 +2384,6 @@ async def auto_trade():
             else:
                 vstop = 0
             get_margin_status(shared_state)
-            add_data_SQL()
             positions = get_positions()
             prices = get_price()
             if prices is None:
