@@ -43,7 +43,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 
-events_df = pd.DataFrame(columns=["datetime", "impact_level", "event"])
+# events_df = pd.DataFrame(columns=["datetime", "impact_level", "event"])
 skip_until = None
 
 value = load_weekconfigs()
@@ -131,78 +131,6 @@ def load_api_settings_sqlite(db_path="api_settings.db"):
         raise RuntimeError("API設定の復号に失敗しました") from e
 
     return api_key, api_secret
-
-# グローバル変数として読み込み
-def fetch_usdjpy_economic_events():
-    url = "https://jp.investing.com/economic-calendar/"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.content, "html.parser")
-
-    rows = soup.select("table.economicCalendarTable tbody tr")
-    events = []
-    today = datetime.now().strftime("%Y-%m-%d")
-
-    for row in rows:
-        time_cell = row.find("td", class_="first left time")
-        if time_cell is None:
-            continue
-        time_str = time_cell.get_text(strip=True)
-        try:
-            dt = datetime.strptime(f"{today} {time_str}", "%Y-%m-%d %H:%M")
-        except ValueError:
-            continue
-        currency = row.find("td", class_="left flagCur noWrap").get_text(strip=True)
-        impact_html = row.find("td", class_="sentiment")
-        impact = impact_html.get_text(strip=True).count("牛")
-        event = row.find("td", class_="event").get_text(strip=True)
-
-        if currency not in ["USD", "JPY"]:
-            continue
-
-        events.append({
-            "datetime": dt,
-            "currency": currency,
-            "impact": impact,
-            "event": event
-        })
-
-    df = pd.DataFrame(events)
-    if not df.empty:
-        df["impact_level"] = df["impact"].map({3: "高", 2: "中", 1: "低", 0: "低"})
-        df = df[["datetime", "currency", "impact_level", "event"]]
-    return df
-
-def set_dynamic_skip(event_time, impact_level):
-    global skip_until
-    minutes = SKIP_MINUTES.get(impact_level, 0)
-    if minutes > 0:
-        skip_until = event_time + timedelta(minutes=minutes)
-        notify_slack(f"⚠ 指標スキップ開始: {event_time}〜{skip_until} ({impact_level})")
-
-def is_skip_active(now=None):
-    global skip_until
-    now = now or datetime.now()
-    if skip_until and now <= skip_until:
-        remaining = (skip_until - now).total_seconds() / 60
-        logging.info(f"⛔ スキップ中（あと {remaining:.1f} 分）")
-        return True
-    return False
-
-def check_and_set_event_skip():
-    df = fetch_usdjpy_economic_events()
-    now = datetime.now()
-
-    for _, row in df.iterrows():
-        event_time = row["datetime"]
-        impact_level = row["impact_level"]
-
-        # 現在から30分以内に開始される重要イベントを検出
-        if now <= event_time <= now + timedelta(minutes=30):
-            set_dynamic_skip(event_time, impact_level)
-            break  # 複数あっても最初の一件でOK（必要に応じて調整）
-
 
 # ミッドナイトモード(Trueで有効化)
 night = True
@@ -1045,27 +973,6 @@ def adjust_max_loss(prices,
         _PREV_MAX_LOSS = MAX_LOSS
 
 import asyncio
-
-# 指標時間帯判定関数
-def is_event_active():
-    """
-    今が指標時間帯かどうか判定する
-    """
-    global events_df
-    now = datetime.now()
-    window_start = now - timedelta(minutes=10)
-    window_end = now + timedelta(minutes=10)
-
-    if not events_df.empty:
-        nearby = events_df[
-            (events_df["datetime"] >= window_start) &
-            (events_df["datetime"] <= window_end)
-        ]
-        if not nearby.empty:
-            for _, row in nearby.iterrows():
-                logging.info(f"⚠ 指標時間帯検出！{row['event']} （{row['impact_level']}）")
-            return True
-    return False
 
 # SIGTERMハンドラ
 def handle_exit(signum, frame):
@@ -2127,15 +2034,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         long_stdev = statistics.stdev(list(price_buffer)[-20:])
 
         now = datetime.now()
-        try:
-            check_and_set_event_skip()
-        except:
-            pass
-        if is_skip_active():
-            logging.info("⚠ 指標スキップ中 → エントリー停止")
-            continue  # または return
-        else:
-            logging.info("⚠ 指標発表予定なし")
         
         if len(price_buffer) < 180:
             if count == 0:
