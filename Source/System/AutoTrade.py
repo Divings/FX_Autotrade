@@ -546,44 +546,6 @@ def load_testmode():
     else:
         return 0
 
-
-import logging
-import os
-import tarfile
-from logging.handlers import TimedRotatingFileHandler
-from datetime import datetime
-
-class TimedRotatingFileHandlerWithTar(TimedRotatingFileHandler):
-    def doRollover(self):
-        # まず通常のローテート処理
-        super().doRollover()
-
-        # ローテート後にできたログを探す
-        log_dir = os.path.dirname(self.baseFilename)
-        base_name = os.path.basename(self.baseFilename)
-
-        # 例: app.log.2026-01-12
-        rotated_logs = [
-            f for f in os.listdir(log_dir)
-            if f.startswith(base_name + ".") and not f.endswith(".tar.gz")
-        ]
-
-        if not rotated_logs:
-            return
-
-        # tar.gz のファイル名（日付単位）
-        today = datetime.now().strftime("%Y-%m-%d")
-        tar_path = os.path.join(log_dir, f"{base_name}.{today}.tar.gz")
-
-        with tarfile.open(tar_path, "w:gz") as tar:
-            for log_file in rotated_logs:
-                full_path = os.path.join(log_dir, log_file)
-                tar.add(full_path, arcname=log_file)
-
-        # 圧縮後、元のログを削除
-        for log_file in rotated_logs:
-            os.remove(os.path.join(log_dir, log_file))
-
 # メイン処理開始
 testmode = load_testmode()
 reset = load_ini()
@@ -695,18 +657,17 @@ if os_name=="Windows":
 
 # ログ設定関数
 def setup_logging():
-    handler = TimedRotatingFileHandlerWithTar(
+    """初期ログ設定（起動時）"""
+    handler = TimedRotatingFileHandler(
         LOG_FILE1,
-        when='midnight',
-        interval=1,
-        backupCount=7,
-        encoding='utf-8',
-        utc=False
+        when='midnight',       # 毎日深夜にローテート
+        interval=1,            # 1日ごとにローテート
+        backupCount=7,         # 最大7個のバックアップファイルを保持
+        encoding='utf-8',      # エンコーディング指定
+        utc=False              # 日本時間でのローテーション
     )
 
-    handler.setFormatter(
-        logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-    )
+    handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
 
     logging.basicConfig(
         level=logging.INFO,
