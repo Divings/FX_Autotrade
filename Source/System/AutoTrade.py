@@ -51,6 +51,17 @@ value = load_weekconfigs()
 # データベース初期化
 init_db()
 
+def load_Auth_conf():
+    import configparser
+    
+    # 設定ファイル読み込み
+    config = configparser.ConfigParser()
+    config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
+    log_level = config.getint("Auth", "enable", fallback=1)# デフォルトは有効(1)
+    return log_level
+
+Auth = load_Auth_conf() # 1:有効,0:無効
+
 SKIP_MINUTES = {
     "高": 40,
     "中": 20,
@@ -2494,7 +2505,8 @@ if __name__ == "__main__":
     
     if os_name != "Windows":
     # import_public_key(key_box, public_key_path)
-        verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
+        if Auth == 1:
+            verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
     try:
         asyncio.run(auto_trade())
     except SystemExit as e:
