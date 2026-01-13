@@ -1771,7 +1771,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         from datetime import datetime, timezone
 
-        now =  datetime.now(timezone.jst())
+        now =  datetime.now()
 
         if not prices:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
