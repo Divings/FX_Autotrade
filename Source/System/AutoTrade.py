@@ -1637,7 +1637,7 @@ first_start = True
 
 # 東京市場時間帯取引スキップ設定
 if USD_TIME == 1:
-    if now.hour >= 6 and now.hour <= 16:                   
+    if now.hour >= 6 and now.hour <= 17:                   
         logging.info(f"[時間制限] 東京市場のため取引スキップ")
 
 candle_buffer = []
@@ -1767,7 +1767,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         from datetime import datetime, timezone
 
-        now =  datetime.now(timezone.utc)
+        now =  datetime.now(timezone.jst())
 
         if not prices:
             logging.warning("[警告] 価格データの取得に失敗 → スキップ")
@@ -1811,7 +1811,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             vccm = 0
             
         if USD_TIME == 1:
-            if now.hour >= 6 and now.hour <= 16:
+            if now.hour >= 6 and now.hour <= 17:
                 if not shared_state.get("vstop_active", False):                   
                     notify_slack(f"[クールダウン] 東京市場のため自動売買スキップ")
                     logging.info(f"[時間制限] 東京市場のため取引スキップ")
@@ -1944,38 +1944,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         candles = build_last_2_candles_from_prices(list(price_buffer))
         logging.info(f"[INFO] キャンドルデータ2本分 {candles}")
         range_value = calculate_range(price_buffer, period=10)
-        
-        if range_value != None:
-            if adx >= 20 and range_value >= 0.05:
-                if nn_nonce == 0:
-                    notify_slack(f"[横ばい判定] 価格が動き始めました")
-                    logging.info("[スキップ] 価格が動き始め")
-                    nn_nonce = 1
-                    if first_start != True:
-                        shared_state["cooldown_untils"] = time.time() + MAX_Stop
-                    else:
-                        first_start = False
-                        
-            else:
-                trend = None
-                nn_nonce = 0
-                shared_state["trend"] = None
-                if n_nonce == 0:
-                    notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
-                    logging.info("[スキップ] 価格横ばい")
-                    n_nonce = 1
-                await asyncio.sleep(interval_sec)
-                continue
-        
-        if len(close_prices) >= 5:
-            price_range = max(close_prices) - min(close_prices)
-            if price_range < 0.03:
-                trend = None
-                shared_state["trend"] = None
-                notify_slack(f"[横ばい判定] 価格変動幅が小さい（{price_range:.4f}）ためスキップ")
-                logging.info("[スキップ] 価格横ばい")
-                await asyncio.sleep(interval_sec)
-                continue
+        logging.info(f"[INFO] 直近10本の価格レンジ: {range_value:.5f}")
         
         today_str = datetime.now().strftime("%Y-%m-%d")
         if adx >= 95:
