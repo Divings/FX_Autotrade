@@ -1468,8 +1468,11 @@ def first_order(trend,shared_state=None):
     else:
         return 2
 
+values=0
 # === フェイルセーフ決済関数 ===
-def failSafe():
+def failSafe(values):
+    if values==1:
+        return 
     """もし終了前に建玉があった時用"""
     positions = get_positions()
     prices=get_price()
@@ -1483,8 +1486,9 @@ def failSafe():
             close_order(pid,size_str,close_side)
             bid = prices["bid"]
             write_log("Fail_Safe", bid)
+        return 0
     else:
-        print("強制決済建玉なし")
+        logging.info("強制決済建玉なし")
         return 0
     
 # === 直近2本のローソク足構築関数 ===
@@ -1669,7 +1673,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global VOL_THRESHOLD
     last_rsi_state = None
     last_adx_state = None
-    
+    values = 0
     vcount = 0
     av = 0
     sstop = 0
@@ -1726,7 +1730,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         now = datetime.now()
         
         if now.hour == 0 and now.minute == 0 and av == 0:
-            failSafe() #翌日になったら強制決済
+            values = failSafe(values) #翌日になったら強制決済
             av = 1
         else:
             av = 0
@@ -1742,7 +1746,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if (now.hour < 6) or (now.hour == 6 and now.minute == 0):
             if m == 0:
                 notify_slack(" 取引抑止時刻になりました、取引を中断します")
-                failSafe()
+                values = failSafe(values)
                 m = 1
             continue
         else:
@@ -1805,7 +1809,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         now = datetime.now()
         if  now.weekday() == 5 and now.hour >= 5 and vccm == 0:
-            failSafe() # 取引中に市場が止まる前に決済
+            values = failSafe(values) # 取引中に市場が止まる前に決済
             vccm = 1
         else:
             vccm = 0
@@ -1824,6 +1828,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 await asyncio.sleep(interval_sec)
                 continue
             else:
+                
                 shared_state["vstop_active"] = False
         if USD_TIME == 0:
             if (18 <= now.hour < 24) or (0 <= now.hour < 2):
@@ -2050,6 +2055,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     shared_state["trend"] = None
                     shared_state["cooldown_untils"] = time.time() + MAX_Stop
                     shared_state["firsts"] = True
+                    values=0
                 else:
                     logging.info(f"初動だが条件未達 → 見送り (spread={spread}, adx={adx}, rsi={rsi})")
             else:
@@ -2229,7 +2235,7 @@ async def auto_trade():
     global trend_none_count
     vstop = 0
     loop = asyncio.get_event_loop()
-
+    values = 0
     # 全タスクを登録
     server_task = asyncio.create_task(start_socket_server(shared_state))
     hold_status_task = loop.create_task(monitor_hold_status(shared_state, stop_event, interval_sec=1))
@@ -2335,7 +2341,7 @@ async def auto_trade():
     except SystemExit as e:
         notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
         try:
-            failSafe()
+            values = failSafe(values)
         except:
             pass
         shutil.rmtree(temp_dir)
