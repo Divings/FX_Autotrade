@@ -1472,7 +1472,7 @@ values=0
 # === フェイルセーフ決済関数 ===
 def failSafe(values):
     if values==1:
-        return 
+        return 1
     """もし終了前に建玉があった時用"""
     positions = get_positions()
     prices=get_price()
@@ -1486,10 +1486,10 @@ def failSafe(values):
             close_order(pid,size_str,close_side)
             bid = prices["bid"]
             write_log("Fail_Safe", bid)
-        return 0
+        return 1
     else:
         logging.info("強制決済建玉なし")
-        return 0
+        return 1
     
 # === 直近2本のローソク足構築関数 ===
 def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
