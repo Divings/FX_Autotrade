@@ -1996,7 +1996,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if price_range < RANGE_BLOCK:
                     trend = None
                     shared_state["trend"] = None
-                    notify_slack(f"[横ばい判定] 価格変動幅が小さい（{price_range:.4f}）ためスキップ")
+                    notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
                     logging.info(f"[横ばい判定] price_range={price_range:.4f}/{RANGE_BLOCK} (spread={SPREAD})")
                     await asyncio.sleep(interval_sec)
                     continue
