@@ -3,6 +3,7 @@
 # 本ソフトウェアの使用、複製、改変、再配布には 合同会社Anvelk Innovations の事前の書面による許可が必要です。
 
 from Add_Amount import *
+import news_block
 import os
 import hmac
 import hashlib
@@ -297,6 +298,7 @@ def download_two_files(base_url, download_dir):
         with open(download_path, 'wb') as f:
             shutil.copyfileobj(response.raw, f)
                 
+
 import os
 import shutil
 import requests
@@ -1655,6 +1657,19 @@ if USD_TIME == 1:
 
 candle_buffer = []
 
+from news_block import load_news_blocks, is_blocked
+
+TODAY = datetime.now().date()
+NEWS_BLOCKS = load_news_blocks(TODAY)
+
+def load_news(v):
+    global TODAY,NEWS_BLOCKS
+    if v==1:
+        return 1
+    TODAY = datetime.now().date()
+    NEWS_BLOCKS = load_news_blocks(TODAY)
+    
+
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     import statistics
@@ -1748,6 +1763,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         
         if now.hour == 0 and now.minute == 0 and av == 0:
             values = failSafe(values) #翌日になったら強制決済
+            load_news(av)
             av = 1
         else:
             av = 0
@@ -2067,6 +2083,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             continue
         else:
             count = 0
+        nows = datetime.now()
+
+        blocked, start, end, currency, importance = is_blocked(nows, NEWS_BLOCKS)
+        if blocked:
+            # ニュースブロックスキップ
+            logging.info(f"[NEWS BLOCK] {currency} ★{importance} {start.strftime('%H:%M')} - {end.strftime('%H:%M')}")
+            continue
 
         # 初動検出
         is_initial, direction = is_trend_initial(candles) # 初動検出関数の呼び出し
