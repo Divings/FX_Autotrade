@@ -233,6 +233,7 @@ def notify_slack(message: str):
     クールダウン抑止時も本文をログへ残す。
     """
     global msg_history
+    time.sleep(1.2)  # 連続送信対策のインターバル
 
     now = time.time()
     msg_hash = hashlib.sha256(message.encode()).hexdigest()
