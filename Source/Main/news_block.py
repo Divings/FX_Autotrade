@@ -1,6 +1,6 @@
 import csv
 from datetime import datetime, timedelta, time
-
+import os
 #CSV_PATH = "news.csv"
 
 # 指標前後のブロック幅（分）
@@ -17,7 +17,8 @@ CSV_PATH=init("datas")/"news.csv"
 
 def load_news_blocks(target_date: datetime.date):
     blocks = []
-
+    if os.path.exists(CSV_PATH) == True:
+        return None
     with open(CSV_PATH, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
