@@ -1849,7 +1849,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             vccm = 0
             
         if USD_TIME == 1:
-            if now.hour >= 6 and now.hour <= 17:
+            if (now.hour > 6 or (now.hour == 6 and now.minute >= 0)) and (now.hour < 18 or (now.hour == 18 and now.minute < 30)):
                 if not shared_state.get("vstop_active", False):                   
                     notify_slack(f"[クールダウン] 東京市場のため自動売買スキップ")
                     logging.info(f"[時間制限] 東京市場のため取引スキップ")
