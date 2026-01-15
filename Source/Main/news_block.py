@@ -13,12 +13,24 @@ def init(path):
     p.mkdir(parents=True, exist_ok=True)
     return p
 
+def get_block_minutes(importance: int) -> int:
+    """
+    指標重要度に応じたブロック時間（分）を返す
+    """
+    if importance >= 3:
+        return 30
+    return 15
+
+# ニュース指標のCSVファイルパス
 CSV_PATH=init("datas")/"news.csv"
 
+# ニュース指標のブロック時間を読み込む
 def load_news_blocks(target_date: datetime.date):
     blocks = []
-    if os.path.exists(CSV_PATH) == True:
-        return None
+
+    if not os.path.exists(CSV_PATH):
+        return blocks
+
     with open(CSV_PATH, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -28,13 +40,20 @@ def load_news_blocks(target_date: datetime.date):
             hh, mm = map(int, row["time"].split(":"))
             event_dt = datetime.combine(target_date, time(hh, mm))
 
-            start = event_dt - timedelta(minutes=BLOCK_BEFORE_MIN)
-            end = event_dt + timedelta(minutes=BLOCK_AFTER_MIN)
+            importance = int(row["importance"])
+            block_min = get_block_minutes(importance)
 
-            blocks.append((start, end, row["currency"], row["importance"]))
+            start = event_dt - timedelta(minutes=block_min)
+            end = event_dt + timedelta(minutes=block_min)
+
+            blocks.append((
+                start,
+                end,
+                row["currency"],
+                importance
+            ))
 
     return blocks
-
 
 def is_blocked(now: datetime, blocks):
     for start, end, currency, importance in blocks:

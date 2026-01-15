@@ -1668,7 +1668,6 @@ def load_news(v):
         return 1
     TODAY = datetime.now().date()
     NEWS_BLOCKS = load_news_blocks(TODAY)
-    
 
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
