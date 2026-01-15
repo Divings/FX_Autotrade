@@ -1661,6 +1661,7 @@ from news_block import load_news_blocks, is_blocked
 
 TODAY = datetime.now().date()
 NEWS_BLOCKS = load_news_blocks(TODAY)
+logging.info(f"[NEWS] loaded {len(NEWS_BLOCKS)} blocks for {TODAY}")
 
 def load_news(v):
     global TODAY,NEWS_BLOCKS
@@ -1668,6 +1669,7 @@ def load_news(v):
         return 1
     TODAY = datetime.now().date()
     NEWS_BLOCKS = load_news_blocks(TODAY)
+    logging.info(f"[NEWS] loaded {len(NEWS_BLOCKS)} blocks for {TODAY}")
 
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
