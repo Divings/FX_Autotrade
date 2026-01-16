@@ -21,8 +21,14 @@ def get_block_minutes(importance: int) -> int:
         return 30
     return 15
 
-# ニュース指標のCSVファイルパス
-CSV_PATH=init("datas")/"news.csv"
+from datetime import datetime
+
+def get_weekly_news_path(base_dir="datas"):
+    now = datetime.now()
+    week = now.isocalendar().week
+    return init(base_dir) / f"news-w{week}.csv"
+
+CSV_PATH = get_weekly_news_path()
 
 # ニュース指標のブロック時間を読み込む
 def load_news_blocks(target_date: datetime.date):
@@ -60,4 +66,3 @@ def is_blocked(now: datetime, blocks):
         if start <= now <= end:
             return True, start, end, currency, importance
     return False, None, None, None, None
-
