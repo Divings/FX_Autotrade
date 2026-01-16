@@ -7,7 +7,17 @@ import os
 BLOCK_BEFORE_MIN = 15
 BLOCK_AFTER_MIN = 15
 
+def write_log():
+    path="/opt/Innovations/news_block_log.txt"
+    with open(path, "a") as f:
+        f.write(f"{datetime.now().isoformat()}\n")
+        f.write(f"CSV_PATH: {CSV_PATH}\n")
+        f.write(f"Exists: {os.path.exists(CSV_PATH)}\n")
+        f.write("\n")
+    return 0
+
 def init(path):
+    write_log()
     from pathlib import Path
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
