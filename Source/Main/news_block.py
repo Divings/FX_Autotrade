@@ -7,7 +7,7 @@ import os
 BLOCK_BEFORE_MIN = 15
 BLOCK_AFTER_MIN = 15
 
-def write_log():
+def write_log(CSV_PATH):
     path="/opt/Innovations/System/news_block_log.txt"
     with open(path, "a") as f:
         f.write(f"{datetime.now().isoformat()}\n")
@@ -17,7 +17,6 @@ def write_log():
     return 0
 
 def init(path):
-    write_log()
     from pathlib import Path
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
@@ -39,7 +38,7 @@ def get_weekly_news_path(base_dir="datas"):
     return init(base_dir) / f"news-w{week}.csv"
 
 CSV_PATH = get_weekly_news_path()
-
+write_log(CSV_PATH)
 # ニュース指標のブロック時間を読み込む
 def load_news_blocks(target_date: datetime.date):
     blocks = []
