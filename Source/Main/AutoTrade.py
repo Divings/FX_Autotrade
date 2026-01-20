@@ -1768,7 +1768,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     
     ADX_START   = 20
     ADX_RELAX   = 18
-
+    n_nonce = 0
     values = 0
     vcount = 0
     av = 0
@@ -2049,53 +2049,16 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         logging.info(f"[INFO] 直近10本の価格レンジ: {range_value:.5f}")
         
         if USD_TIME==1 and load_conf_FILTER()==1: # 東京時間モードだけ有効
-            if range_value != None:
-                if adx >= 20 and range_value >= RANGE_START:
-                    if nn_nonce == 0:
-                        notify_slack(f"[横ばい判定] 価格が動き始めました")
-                        logging.info("[スキップ] 価格が動き始め")
-                        nn_nonce = 1
-                        if first_start != True:
-                            shared_state["cooldown_untils"] = time.time() + MAX_Stop
-                        else:
-                            first_start = False
-                        
+                if is_sideways_sma(close_prices):
+                    if n_nonce == 0:
+                        trend = None
+                        shared_state["trend"] = None
+                        logging.info("[横ばい判定:SMA] SMAが収束しているためスキップ")
+                        await asyncio.sleep(interval_sec)
+                        n_nonce = 1
+                    continue
                 else:
-                    trend = None
-                    nn_nonce = 0
-                    shared_state["trend"] = None
-                    if n_nonce == 0:
-                        notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
-                        n_nonce = 1
-                    logging.info(f"[横ばい判定] ADX={adx:.1f}/{ADX_START} range={range_value:.4f}/{RANGE_START}")
-                    await asyncio.sleep(interval_sec)
-                    continue
-                if is_sideways_sma(close_prices):
-                    
-                    if n_nonce == 0:
-                        trend = None
-                        shared_state["trend"] = None
-                        logging.info("[横ばい判定:SMA] SMAが収束しているためスキップ")
-                        await asyncio.sleep(interval_sec)
-                        n_nonce = 1
-                    continue
-            if len(close_prices) >= 5:
-                price_range = max(close_prices) - min(close_prices)
-                if price_range < RANGE_BLOCK:
-                    trend = None
-                    shared_state["trend"] = None
-                    notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
-                    logging.info(f"[横ばい判定] price_range={price_range:.4f}/{RANGE_BLOCK} (spread={SPREAD})")
-                    await asyncio.sleep(interval_sec)
-                    continue
-                if is_sideways_sma(close_prices):
-                    if n_nonce == 0:
-                        trend = None
-                        shared_state["trend"] = None
-                        logging.info("[横ばい判定:SMA] SMAが収束しているためスキップ")
-                        await asyncio.sleep(interval_sec)
-                        n_nonce = 1
-                    continue
+                    n_nonce = 0
 
         today_str = datetime.now().strftime("%Y-%m-%d")
         if adx >= 95:
