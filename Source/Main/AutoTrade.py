@@ -61,11 +61,13 @@ value = load_weekconfigs()
 # データベース初期化
 init_db()
 
+# SMA計算関数
 def sma(values, period):
     if len(values) < period:
         return None
     return sum(values[-period:]) / period
 
+# リスト変換関数
 def convert_list(prices):
     # deque, list, tuple のいずれかか確認
     if not isinstance(prices, (list, tuple, deque)) or len(prices) < 2:
@@ -76,6 +78,7 @@ def convert_list(prices):
         prices = list(prices)
     return prices
 
+# 買い・売り判定関数
 def can_buy(closes):
     closes = convert_list(closes)
     if closes is False:
@@ -89,7 +92,7 @@ def can_buy(closes):
 
     # 上昇トレンド条件
     return sma5 > sma13 > sma25
-
+# 売り判定関数
 def can_sell(closes):
     closes = convert_list(closes)
     if closes is False:
@@ -104,6 +107,24 @@ def can_sell(closes):
     # 下降トレンド条件
     return sma5 < sma13 < sma25
 
+# 横ばい判定関数(SMA団子)
+def is_sideways_sma(close_prices, threshold=0.015):
+    values = convert_list(close_prices)
+
+    if len(values) < 25:
+        return True  # データ不足は横ばい扱い
+
+    sma5  = sum(values[-5:]) / 5
+    sma13 = sum(values[-13:]) / 13
+    sma25 = sum(values[-25:]) / 25
+
+    max_sma = max(sma5, sma13, sma25)
+    min_sma = min(sma5, sma13, sma25)
+
+    # SMAが団子なら横ばい
+    return (max_sma - min_sma) < threshold
+
+# FILTER設定読み込み(1:有効,0:無効)
 def load_Auth_conf():
     import configparser
     
@@ -2049,7 +2070,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     logging.info(f"[横ばい判定] ADX={adx:.1f}/{ADX_START} range={range_value:.4f}/{RANGE_START}")
                     await asyncio.sleep(interval_sec)
                     continue
-        
+                if is_sideways_sma(close_prices):
+                    
+                    if n_nonce == 0:
+                        trend = None
+                        shared_state["trend"] = None
+                        logging.info("[横ばい判定:SMA] SMAが収束しているためスキップ")
+                        await asyncio.sleep(interval_sec)
+                        n_nonce = 1
+                    continue
             if len(close_prices) >= 5:
                 price_range = max(close_prices) - min(close_prices)
                 if price_range < RANGE_BLOCK:
@@ -2058,6 +2087,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     notify_slack(f"[横ばい判定] 価格変動幅が小さいためスキップ")
                     logging.info(f"[横ばい判定] price_range={price_range:.4f}/{RANGE_BLOCK} (spread={SPREAD})")
                     await asyncio.sleep(interval_sec)
+                    continue
+                if is_sideways_sma(close_prices):
+                    if n_nonce == 0:
+                        trend = None
+                        shared_state["trend"] = None
+                        logging.info("[横ばい判定:SMA] SMAが収束しているためスキップ")
+                        await asyncio.sleep(interval_sec)
+                        n_nonce = 1
                     continue
 
         today_str = datetime.now().strftime("%Y-%m-%d")
