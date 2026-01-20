@@ -66,7 +66,20 @@ def sma(values, period):
         return None
     return sum(values[-period:]) / period
 
+def convert_list(prices):
+    # deque, list, tuple のいずれかか確認
+    if not isinstance(prices, (list, tuple, deque)) or len(prices) < 2:
+        return False
+
+    # dequeの場合はリストに変換
+    if isinstance(prices, deque):
+        prices = list(prices)
+    return prices
+
 def can_buy(closes):
+    closes = convert_list(closes)
+    if closes is False:
+        return False
     sma5  = sma(closes, 5)
     sma13 = sma(closes, 13)
     sma25 = sma(closes, 25)
@@ -78,6 +91,9 @@ def can_buy(closes):
     return sma5 > sma13 > sma25
 
 def can_sell(closes):
+    closes = convert_list(closes)
+    if closes is False:
+        return False
     sma5  = sma(closes, 5)
     sma13 = sma(closes, 13)
     sma25 = sma(closes, 25)
