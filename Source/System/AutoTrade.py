@@ -61,6 +61,33 @@ value = load_weekconfigs()
 # データベース初期化
 init_db()
 
+def sma(values, period):
+    if len(values) < period:
+        return None
+    return sum(values[-period:]) / period
+
+def can_buy(closes):
+    sma5  = sma(closes, 5)
+    sma13 = sma(closes, 13)
+    sma25 = sma(closes, 25)
+
+    if None in (sma5, sma13, sma25):
+        return False
+
+    # 上昇トレンド条件
+    return sma5 > sma13 > sma25
+
+def can_sell(closes):
+    sma5  = sma(closes, 5)
+    sma13 = sma(closes, 13)
+    sma25 = sma(closes, 25)
+
+    if None in (sma5, sma13, sma25):
+        return False
+
+    # 下降トレンド条件
+    return sma5 < sma13 < sma25
+
 def load_Auth_conf():
     import configparser
     
@@ -568,7 +595,6 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.005):
         (prev["low"] - last["close"]) >= min_breakout_ratio
     ):
         return True, "SELL"
-
     return False, ""
 
 # ===ログ設定 ===
@@ -2105,7 +2131,12 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     rsi_ok = False
                 if direction == "SELL" and rsi <= 30:
                     rsi_ok = False
-                
+                if direction =="BUY":
+                    if not can_buy(close_prices):
+                        continue
+                else:
+                    if not can_sell(close_prices):
+                        continue
                 # ボラリティフィルター
                 if is_high_volatility(close_prices) == False:
                     if trend is None:
