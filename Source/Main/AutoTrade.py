@@ -2149,9 +2149,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     rsi_ok = False
                 if direction =="BUY":
                     if not can_buy(close_prices):
+                        logging.info("BUY一致せずスキップ")
                         continue
-                else:
+                elif direction=="SELL":
                     if not can_sell(close_prices):
+                        logging.info("SELL一致せずスキップ")
                         continue
                 # ボラリティフィルター
                 if is_high_volatility(close_prices) == False:
