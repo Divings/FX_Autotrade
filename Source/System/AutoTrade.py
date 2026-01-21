@@ -2048,7 +2048,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         range_value = calculate_range(price_buffer, period=10)
         logging.info(f"[INFO] 直近10本の価格レンジ: {range_value:.5f}")
         
-        if USD_TIME==1 and load_conf_FILTER()==1: # 東京時間モードだけ有効
+        if load_conf_FILTER()==1: # 動的フィルタリング有効
                 if is_sideways_sma(close_prices):
                     if n_nonce == 0:
                         trend = None
@@ -2149,9 +2149,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     rsi_ok = False
                 if direction =="BUY":
                     if not can_buy(close_prices):
+                        logging.info("BUY一致せずスキップ")
                         continue
-                else:
+                elif direction=="SELL":
                     if not can_sell(close_prices):
+                        logging.info("SELL一致せずスキップ")
                         continue
                 # ボラリティフィルター
                 if is_high_volatility(close_prices) == False:
