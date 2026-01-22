@@ -58,9 +58,6 @@ skip_until = None
 
 value = load_weekconfigs()
 
-# データベース初期化
-init_db()
-
 # SMA計算関数
 def sma(values, period):
     if len(values) < period:
