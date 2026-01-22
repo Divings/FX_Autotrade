@@ -58,7 +58,7 @@ def verify_signature(gpg_home, signature_file, update_file):
 
 # 設定ファイルを読み込み
 mode=load_conf() # 1:有効,0:無効
-print(mode)
+
 # モードが無効なら終了(正常起動とする)
 if mode == 0:
     notify_slack("[INFO] 署名検証が無効です。\n処理のカスタマイズが可能です")
