@@ -668,13 +668,14 @@ def setup_logging():
     handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.ERROR,
         handlers=[handler]
     )
 
 # 最大240本まで保持（例：1分足で4時間分）
 price_history = deque(maxlen=240)
 
+asf=1
 try:
     setup_logging()
 except Exception as e:
@@ -1206,6 +1207,9 @@ def is_market_open():
         response = requests.get(f"{FOREX_PUBLIC_API}/v1/status")
         response.raise_for_status()
         status = response.json().get("data", {}).get("status")
+        if status == False:
+            logging.warning("[市場] 指標情報が未定義です")
+            status="UNDEFINED"
         # notify_slack(f"[市場] ステータス: {status}")
         return status
     except Exception as e:
@@ -2057,7 +2061,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                     continue
                 else:
                     n_nonce = 0
-
+                    
         today_str = datetime.now().strftime("%Y-%m-%d")
         if adx >= 95:
             # 無効化（非常事態）
@@ -2065,45 +2069,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             notify_slack(f"[警告] ADXが100に近いためスキップ")
             logging.warning("[スキップ] ADX異常値 → 判定中止")
             continue
-        elif adx >= 70 and abs(diff) > 0.015 and trend is not None and (now.hour > 5 and now.hour < 9):
-            last_forced_entry_date = shared_state.get("forced_entry_date")
-
-            if last_forced_entry_date == today_str:
-                logging.info("[強制エントリー制限] 本日すでに実行済みのためスキップ")
-                
-            else:
-                now = datetime.now()
-                if now.hour <= 21 or now.hour <= 5:
-                    timestop = 1
-                    # クロス不要で許可
-                    shared_state["trend"] = trend
-                    try:
-                        notify_slack(f"[強トレンド] MACDクロス無視してエントリー（ADX={adx:.2f}, diff={diff:.4f}）")
-                    except:
-                        pass
-                    notify_slack(f"[トレンド] MACDクロス{trend}（RSI={rsi_str}, ADX={adx_str}）")
-                    a=first_order(trend,shared_state)
-                    if a==2:
-                        logging.info(f"[結果] {trend} すでにポジションあり")
-                    elif a==1:
-                        logging.info(f"[結果] {trend} 成功")
-                        shared_state["oders_error"]=False
-                        shared_state["forced_entry_date"] = today_str
-                    else:
-                        logging.error(f"[結果] {trend} 失敗")
-                    if a==1:
-                        logging.info("[エントリー] ADX強すぎるためクロス無視")
-                        shared_state["forced_entry_date"] = today_str
-                        shared_state["last_trend"] = trend
-                else:
-                    if timestop == 0:
-                        if now.hour <=5 :
-                            notify_slack(f"[情報] MACDクロス無視してエントリーだが、5時前なのでスキップ")
-                            logging.info("[情報] MACDクロス無視してエントリーだが、5時前なのでスキップ")
-                        elif now.hour >=22:
-                            notify_slack(f"[情報] MACDクロス無視してエントリーだが、9時以降なのでスキップ")
-                            logging.info("[情報] MACDクロス無視してエントリーだが、9時以降なのでスキップ")
-                        timestop = 1
+        
         n_nonce = 0
         if rsi < 20:
             notify_slack(f"[RSI下限] RSI 警戒でスキップ")
