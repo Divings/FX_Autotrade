@@ -2,7 +2,6 @@
 # 本ソフトウェアは 合同会社Anvelk Innovations のプロプライエタリライセンスに基づいて提供されています。
 # 本ソフトウェアの使用、複製、改変、再配布には 合同会社Anvelk Innovations の事前の書面による許可が必要です。
 
-from Add_Amount import *
 import news_block
 import os
 import hmac
