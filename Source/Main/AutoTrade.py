@@ -706,7 +706,7 @@ DEFAULT_CONFIG = {
     "CHECK_INTERVAL": 3,
     "MAINTENANCE_MARGIN_RATIO": 0.5,
     "VOL_THRESHOLD": 0.03,
-    "TIME_STOP":22,
+    "TIME_STOP":6,
     "MACD_DIFF_THRESHOLD":0.002,
     "SKIP_MODE":0,
     "SYMBOL":"USD_JPY",
@@ -1751,7 +1751,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
     trend = shared_state.get("trend",None)
-    
+    global testmode
     VOL_THRESHOLD_SHORT = 0.006
     VOL_THRESHOLD_LONG = 0.008
     import hashlib
@@ -1761,7 +1761,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global VOL_THRESHOLD
     last_rsi_state = None
     last_adx_state = None
-
+    
     SPREAD = 0.05
     RANGE_START = SPREAD * 1.6   # 0.08
     RANGE_BLOCK = SPREAD * 1.2   # 0.06
@@ -1840,7 +1840,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             m = 0
 
-        if (now.hour < 6) or (now.hour == 6 and now.minute == 0):
+        if TIME_STOP != 0 and (now.hour < TIME_STOP or(now.hour == TIME_STOP and now.minute == 0)):
             if m == 0:
                 notify_slack(" 取引抑止時刻になりました、取引を中断します")
                 values = failSafe(values)
@@ -1925,9 +1925,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 await asyncio.sleep(interval_sec)
                 continue
             else:
-                
                 shared_state["vstop_active"] = False
-        if USD_TIME == 0:
+        elif USD_TIME == 0:
             if (18 <= now.hour < 24) or (0 <= now.hour < 2):
                 if not shared_state.get("vstop_active", False):                   
                     notify_slack(f"[クールダウン] 欧州/NY市場のため自動売買スキップ")
@@ -1942,7 +1941,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 continue
             else:
                 shared_state["vstop_active"] = False
-                
+        else:
+            logging.warning(f"想定外の USD_TIME 値: {USD_TIME}（時間制御なし）")
+
         spread = ask - bid
         if spread > MAX_SPREAD:
             shared_state["trend"] = None
@@ -2127,12 +2128,15 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             count = 0
         nows = datetime.now()
-
-        blocked, start, end, currency, importance = is_blocked(nows, NEWS_BLOCKS)
-        if blocked:
-            # ニュースブロックスキップ
-            logging.info(f"[NEWS BLOCK] {currency} ★{importance} {start.strftime('%H:%M')} - {end.strftime('%H:%M')}")
-            continue
+        if SKIP_MODE == 0:
+            blocked, start, end, currency, importance = is_blocked(nows, NEWS_BLOCKS)
+            if blocked:
+                # ニュースブロックスキップ
+                logging.info(f"[NEWS BLOCK] {currency} ★{importance} {start.strftime('%H:%M')} - {end.strftime('%H:%M')}")
+                continue
+        else:
+            logging.info(f"[NEWS BLOCK] 指標ブロック無効化モード (テストモード有効化)")
+            testmode = 1
 
         # 初動検出
         is_initial, direction = is_trend_initial(candles) # 初動検出関数の呼び出し
