@@ -1208,7 +1208,7 @@ def is_market_open():
         response.raise_for_status()
         status = response.json().get("data", {}).get("status")
         if status == False:
-            logging.warning("[市場] 指標情報が未定義です")
+            logging.warning("[市場] 指標情報が未定義状態です。\nシステムエラーに注意してください")
             status="UNDEFINED"
         # notify_slack(f"[市場] ステータス: {status}")
         return status
@@ -1218,7 +1218,8 @@ def is_market_open():
 
 # === 現在価格取得 ===
 def get_price():
-    if is_market_open() != "OPEN":
+    marcket_status = is_market_open()
+    if marcket_status != "OPEN" and marcket_status != "UNDEFINED":
         return None
     try:
         res = requests.get(f"{FOREX_PUBLIC_API}/v1/ticker")
@@ -1798,7 +1799,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         weekday_number = today.weekday()
         status_market = is_market_open()
         
-        if status_market != "OPEN":
+        if status_market != "OPEN"and status_market != "UNDEFINED":
             if sstop == 0:
                 notify_slack(f"[市場] 市場が{status_market}中")
                 logging.info("[市場] 市場が閉場中")
@@ -2350,7 +2351,7 @@ async def auto_trade():
     try:
         while True:
             status_market = is_market_open()
-            if  status_market != "OPEN":
+            if  status_market != "OPEN" and status_market != "UNDEFINED":
                 if vstop==0:
                     notify_slack(f"[市場] 市場が{status_market}中")
                     vstop = 1
