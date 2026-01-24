@@ -130,6 +130,14 @@ def load_Auth_conf():
     log_level = config.getint("Auth", "enable", fallback=1)# デフォルトは有効(1)
     return log_level
 
+def load_Log_conf():
+    import configparser
+    # 設定ファイル読み込み
+    config = configparser.ConfigParser()
+    config.read("/opt/Innovations/System/logconfig.ini", encoding="utf-8")
+    log_level = config.get("DEFAULT", "log_level", fallback="ERROR")# デフォルトは有効(1)
+    return log_level
+
 Auth = load_Auth_conf() # 1:有効,0:無効
 
 SKIP_MINUTES = {
@@ -653,6 +661,8 @@ os_name = platform.system()
 if os_name=="Windows":
     print(temp_dir)
 
+logleval=load_Log_conf()
+
 # ログ設定関数
 def setup_logging():
     """初期ログ設定（起動時）"""
@@ -668,7 +678,7 @@ def setup_logging():
     handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
 
     logging.basicConfig(
-        level=logging.ERROR,
+        level=logleval,
         handlers=[handler]
     )
 
