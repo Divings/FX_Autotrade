@@ -612,12 +612,6 @@ def is_trend_initial(candles, min_body_size=0.003, min_breakout_ratio=0.005):
     
     if (range_last / body_last) > 4:
         return False, ""  # ヒゲ比率が高すぎる場合は除外
-    
-    # try:
-    #     if body_prev != 0 and (body_last / body_prev) < 1.5:
-    #         return False, ""
-    # except:
-    #     pass
 
     # 買いの初動
     if (
@@ -909,15 +903,6 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
             size_str = int(pos["size"])
             side = pos.get("side", "BUY").upper()
             close_side = "SELL" if side == "BUY" else "BUY"
-            
-            # Decimal 利用時のコード（コメントアウト中）
-            # LOT_SIZE = Decimal(str(LOT_SIZE))
-
-            # 利益計算
-            # raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
-            # profit_raws = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-            # profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             # スリッページバッファ込みで早めに判断
             prices = get_price()
@@ -932,8 +917,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
                 continue
             
             profit =  float(pos["lossGain"])
-            #get_positionLossGain(API_KEY,API_SECRET)
-            
+                        
             # 即時損切判定
             if profit <= -MAX_LOSS + SLIPPAGE_BUFFER:
                 if spread > MAX_SPREAD:
@@ -972,7 +956,7 @@ else:
 # === 設定読み込み ===
     config = load_config_from_mysql()
     load_config_status = "設定ソース:Mysql"
-#print(load_config_status)
+
     
 # グローバル変数に設定値を適用
 SYMBOL = config["SYMBOL"]
@@ -1175,7 +1159,6 @@ def import_public_key(gpg_home, key_path):
     """公開鍵をGPGにインポート"""
     try:
         subprocess.run(['gpg', '--homedir', gpg_home, '--import', key_path], check=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        # print("公開鍵をインポートしました")
     except subprocess.CalledProcessError:
         notify_slack("公開鍵インポート失敗")
         sys.exit(1)
@@ -1192,7 +1175,6 @@ def verify_signature(gpg_home, signature_file, update_file):
         print(result.stdout)
         print(result.stderr)
         sys.exit(1)
-    # notify_slack("[INFO] 署名検証成功")
 
 # 取引余力通知関数
 def notify_asset():
@@ -1220,7 +1202,6 @@ def is_market_open():
         if status == False:
             logging.warning("[市場] 指標情報が未定義状態です。\nシステムエラーに注意してください")
             status="UNDEFINED"
-        # notify_slack(f"[市場] ステータス: {status}")
         return status
     except Exception as e:
         logging.error(f"[市場] 状態取得失敗: {e}")
@@ -1393,7 +1374,6 @@ def fee_test(trend):
         return
     amount = 1.0 * 10000 * price  # 0.1lot = 1000通貨、1lot = 10000通貨
     fee = amount * 0.00002  # 0.002%
-    # notify_slack(f"想定手数料は、{fee:.3f} 円です")
     logging.info(f"想定手数料: {fee:.3f} 円 (ロット: {LOT_SIZE}, レート: {price}, 約定金額: {amount:.2f})")
         
 # === 注文発行 ===
@@ -1516,7 +1496,6 @@ def close_order(position_id, size, side):
 
 # === 初回注文関数 ===
 def first_order(trend,shared_state=None):
-    # now = datetime.now()
     global rootOrderIds
     positions = get_positions()
     prices = get_price()
@@ -1586,7 +1565,6 @@ def build_last_2_candles_from_prices(prices: list[float]) -> list[dict]:
         return []
 
     candles=[]
-    #logging.info(f"price_bufferの長さ: {len(price_buffer)}")
     for i in range(2):
         start = -40 + i*20
         end = None if i == 1 else start + 20
@@ -1757,7 +1735,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global candle_buffer
     global price_buffer
     mcv = 0
-    # price_buffer = deque(maxlen=240)
     global MAX_SPREAD
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
@@ -2041,7 +2018,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         macd_cross_down = macd[-2] >= signal[-2] and macd[-1] < signal[-1]
 
         macd_bullish = macd[-1] > signal[-1]  # クロスしてる or 継続中    
-        # macd_bearish = macd[-1] < signal[-1]  # デッドクロスまたは継続中
+        macd_bearish = macd[-1] < signal[-1]  # デッドクロスまたは継続中
+        
         try:
             Traring_Stop(adx,max_profits)
         except Exception as e:
@@ -2173,7 +2151,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 await asyncio.sleep(interval_sec)
                 continue
             now = datetime.now()
-            # adjust_max_loss(close_prices)
             trend_active = False
             if is_volatile(close_prices, candles):
                 notify_slack("[フィルター] 乱高下中につき判定スキップ")
@@ -2272,7 +2249,6 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             # 利益計算
             raw_profit = (ask - entry if side == "BUY" else entry - bid) * LOT_SIZE
             profit = raw_profit.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            # profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             entry_time = shared_state.get("entry_time")
             if entry_time is None:
@@ -2478,7 +2454,6 @@ async def auto_trade():
 if __name__ == "__main__":
     
     if os_name != "Windows":
-    # import_public_key(key_box, public_key_path)
         if Auth == 1:
             verify_signature(key_box, SIGNATURE_FILE, UPDATE_FILE)
     try:
