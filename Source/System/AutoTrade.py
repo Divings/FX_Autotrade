@@ -696,7 +696,7 @@ price_buffer = load_price_buffer()
 
 # LOG_FILE = "fx_trade_log.csv"
 LOSS_STREAK_THRESHOLD = 3
-LOSS_STOP=3
+
 COOLDOWN_DURATION_SEC = 180  # 3分間
 
 # デフォルト設定値
@@ -713,7 +713,8 @@ DEFAULT_CONFIG = {
     "SKIP_MODE":0,
     "SYMBOL":"USD_JPY",
     "USD_TIME":0,
-    "MAX_Stop":30
+    "MAX_Stop":30,
+    "LOSS_STOP":0
 }
 
 # グローバル変数初期化
@@ -737,6 +738,8 @@ def is_in_cooldown(shared_state):
 
 def record_result_block(profit, shared_state):
     global testmode
+    if LOSS_STOP==0: # 0の場合は無効
+        return
     if profit < 0:
         shared_state["loss_streak"] = shared_state.get("loss_streak", 0) + 1
         if shared_state["loss_streak"] >= LOSS_STOP:
@@ -983,6 +986,7 @@ MACD_DIFF_THRESHOLD =config["MACD_DIFF_THRESHOLD"]
 SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップするかどうか、スキップする場合はTrue
 USD_TIME = config["USD_TIME"]
 MAX_Stop = config["MAX_Stop"]
+LOSS_STOP= config["LOSS_STOP"] 
 
 # 夜間判定関数
 def is_night_time():
