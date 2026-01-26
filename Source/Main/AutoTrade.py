@@ -1837,7 +1837,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             m = 0
 
-        if now.hour == 17 and now.minute == 45 and shared_state.get("price_reset_done") != True:
+        if now.hour == 18 and now.minute == 30 and shared_state.get("price_reset_done") != True:
             high_prices.clear()
             low_prices.clear()
             close_prices.clear()
@@ -1899,49 +1899,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         else:
             vccm = 0
 
-        try:
-            rsi = calculate_rsi(list(price_buffer), period=14)
-            adx = calculate_adx(high_prices, low_prices, close_prices, period=14)
-            rsi_str = f"{rsi:.2f}" if rsi is not None else "None"
-            adx_str = f"{adx:.2f}" if adx is not None else "None"
-            logging.info(f"[指標] RSI={rsi_str}, ADX={adx_str}")
-        except Exception as e:
-            rsi_str = str(rsi) if 'rsi' in locals() else "未定義"
-            adx_str = str(adx) if 'adx' in locals() else "未定義"
-            notify_slack(f"[エラー] RSI/ADX計算中に例外: {e}（RSI={rsi_str}, ADX={adx_str}）")
-            logging.exception("RSI/ADX計算中に例外が発生")
-            await asyncio.sleep(interval_sec)
-            continue
-
-        if rsi is None or adx is None:
-            if vstop==0:
-               shared_state["trend"] = None
-               notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
-               logging.warning("[スキップ] RSI/ADXがNone")
-               vstop = 1
-               await asyncio.sleep(interval_sec)
-               continue
-        else:
-            shared_state["RSI"] = rsi
-            vstop = 0
-
-        if len(close_prices) < 14:
-            logging.info(f"[情報] ADX計算に必要なデータ不足 ({len(close_prices)}/14)")
-            if not shared_state.get("adx_wait_notice", False):
-                notify_slack("[待機中] ADX計算に必要なデータが不足 → 判定スキップ中")
-                shared_state["adx_wait_notice"] = True
-                await asyncio.sleep(interval_sec)
-            continue
-        else:
-            shared_state["adx_wait_notice"] = False
-            
-        macd, signal = calc_macd(close_prices)
-        if len(macd) < 2 or len(signal) < 2:
-            notify_slack("[注意] MACDが未計算のため判定スキップ中")
-            logging.warning("[スキップ] MACD未計算")
-            await asyncio.sleep(interval_sec)
-            continue
-        
         # === 時間制御による取引スキップ ===
         if USD_TIME == 1:
             if (now.hour > 6 or (now.hour == 6 and now.minute >= 0)) and (now.hour < 18 or (now.hour == 18 and now.minute < 30)):
@@ -2013,6 +1970,49 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         shared_state["last_long_ma"] = long_ma
         
         diff = short_ma - long_ma
+
+        try:
+            rsi = calculate_rsi(list(price_buffer), period=14)
+            adx = calculate_adx(high_prices, low_prices, close_prices, period=14)
+            rsi_str = f"{rsi:.2f}" if rsi is not None else "None"
+            adx_str = f"{adx:.2f}" if adx is not None else "None"
+            logging.info(f"[指標] RSI={rsi_str}, ADX={adx_str}")
+        except Exception as e:
+            rsi_str = str(rsi) if 'rsi' in locals() else "未定義"
+            adx_str = str(adx) if 'adx' in locals() else "未定義"
+            notify_slack(f"[エラー] RSI/ADX計算中に例外: {e}（RSI={rsi_str}, ADX={adx_str}）")
+            logging.exception("RSI/ADX計算中に例外が発生")
+            await asyncio.sleep(interval_sec)
+            continue
+
+        if rsi is None or adx is None:
+            if vstop==0:
+               shared_state["trend"] = None
+               notify_slack("[注意] RSIまたはADXが未計算のため判定スキップ中")
+               logging.warning("[スキップ] RSI/ADXがNone")
+               vstop = 1
+               await asyncio.sleep(interval_sec)
+               continue
+        else:
+            shared_state["RSI"] = rsi
+            vstop = 0
+
+        if len(close_prices) < 14:
+            logging.info(f"[情報] ADX計算に必要なデータ不足 ({len(close_prices)}/14)")
+            if not shared_state.get("adx_wait_notice", False):
+                notify_slack("[待機中] ADX計算に必要なデータが不足 → 判定スキップ中")
+                shared_state["adx_wait_notice"] = True
+                await asyncio.sleep(interval_sec)
+            continue
+        else:
+            shared_state["adx_wait_notice"] = False
+            
+        macd, signal = calc_macd(close_prices)
+        if len(macd) < 2 or len(signal) < 2:
+            notify_slack("[注意] MACDが未計算のため判定スキップ中")
+            logging.warning("[スキップ] MACD未計算")
+            await asyncio.sleep(interval_sec)
+            continue
         
         macd_cross_up = macd[-2] <= signal[-2] and macd[-1] > signal[-1]
         macd_cross_down = macd[-2] >= signal[-2] and macd[-1] < signal[-1]
