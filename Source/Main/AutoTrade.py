@@ -696,6 +696,7 @@ price_buffer = load_price_buffer()
 
 # LOG_FILE = "fx_trade_log.csv"
 LOSS_STREAK_THRESHOLD = 3
+LOSS_STOP=3
 COOLDOWN_DURATION_SEC = 180  # 3分間
 
 # デフォルト設定値
@@ -733,6 +734,16 @@ def record_result(profit, shared_state):
 def is_in_cooldown(shared_state):
     cooldown_until = shared_state.get("cooldown_until", 0)
     return time.time() < cooldown_until, max(0, int(cooldown_until - time.time()))
+
+def record_result_block(profit, shared_state):
+    global testmode
+    if profit < 0:
+        shared_state["loss_streak"] = shared_state.get("loss_streak", 0) + 1
+        if shared_state["loss_streak"] >= LOSS_STOP:
+            shared_state["cooldown_until"] = time.time() + COOLDOWN_DURATION_SEC
+            notify_slack(f"[連敗クールダウン] {LOSS_STOP}連敗のため取引中止")
+            failSafe(0)
+            testmode=1
 
 # 逆サイド取得関数
 def reverse_side(side: str) -> str:
@@ -928,7 +939,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
                 start = time.time()
                 close_order(pid, size_str, close_side)
                 end = time.time()
-                
+                record_result_block(profit, shared_state)
                 record_result(profit, shared_state)
                 write_log("LOSS_CUT_FAST", bid)
                 if shared_state.get("firsts")==True:
@@ -2189,9 +2200,11 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         size_str = int(pos["size"])
                         side = pos.get("side", "BUY").upper()
                         close_side = "SELL" if side == "BUY" else "BUY"
+                    
                     close_order(pid, size_str, close_side)
                     write_log(close_side, bid)
             elif positions and trend == "BUY" and macd_cross_down:
+                counts=counts+1
                 notify_slack(f"[トレンド] トレンド反転 即時損切り")
                 positions = get_positions()
                 prices = get_price()
@@ -2211,6 +2224,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         close_side = "SELL" if side == "BUY" else "BUY"
                     close_order(pid, size_str, close_side)
                     write_log(close_side, bid)
+                    
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         
         if shared_state.get("cmd") == "save_adx":
