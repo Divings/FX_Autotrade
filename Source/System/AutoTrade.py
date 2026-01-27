@@ -1965,12 +1965,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         spread = ask - bid
         
-        logging.info(f"[スプレッド] 現在のスプレッド={spread:.5f}")
+        if nstop == 0:
+            logging.info(f"[スプレッド] 現在のスプレッド={spread:.5f}")
 
         if spread > MAX_SPREAD:
             shared_state["trend"] = None
             if nstop== 0:
-                notify_slack(f"[スプレッド超過] 現在のスプレッド={spread:.5f} → エントリーをスキップ")
+                notify_slack(f"[スプレッド超過] エントリーをスキップ")
                 logging.warning(f"[スキップ] スプレッドが広すぎるため判定中止（{spread:.5f} > {MAX_SPREAD:.5f}）")
                 nstop = 1
             continue
