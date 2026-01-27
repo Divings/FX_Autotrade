@@ -1532,6 +1532,9 @@ def first_order(trend,shared_state=None):
     bid = prices["bid"]
     ask = prices["ask"]
     spread = ask - bid
+
+    logging.info(f"[発注時スプレッド] 現在のスプレッド={spread:.5f}")
+    
     if spread > MAX_SPREAD:
         notify_slack(f"[警告] スプレッドの差が許容範囲外なので取引中止")
         return 3
@@ -1961,6 +1964,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.warning(f"想定外の USD_TIME 値: {USD_TIME}（時間制御なし）")
 
         spread = ask - bid
+        
+        logging.info(f"[スプレッド] 現在のスプレッド={spread:.5f}")
+
         if spread > MAX_SPREAD:
             shared_state["trend"] = None
             if nstop== 0:
