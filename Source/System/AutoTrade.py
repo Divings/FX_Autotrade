@@ -63,6 +63,7 @@ def sma(values, period):
         return None
     return sum(values[-period:]) / period
 
+
 # リスト変換関数
 def convert_list(prices):
     # deque, list, tuple のいずれかか確認
@@ -73,6 +74,11 @@ def convert_list(prices):
     if isinstance(prices, deque):
         prices = list(prices)
     return prices
+
+SMA_TANGLE_DIST = 0.015
+
+def is_sma_tangled(sma5, sma13):
+    return abs(sma5 - sma13) <= SMA_TANGLE_DIST
 
 # 買い・売り判定関数
 def can_buy(closes):
@@ -86,8 +92,12 @@ def can_buy(closes):
     if None in (sma5, sma13, sma25):
         return False
 
+    if is_sma_tangled(sma5, sma13):
+        return False
+    
     # 上昇トレンド条件
     return sma5 > sma13 > sma25
+
 # 売り判定関数
 def can_sell(closes):
     closes = convert_list(closes)
@@ -99,8 +109,10 @@ def can_sell(closes):
 
     if None in (sma5, sma13, sma25):
         return False
-
-    # 下降トレンド条件
+    
+    if is_sma_tangled(sma5, sma13):
+        return False
+    
     return sma5 < sma13 < sma25
 
 # 横ばい判定関数(SMA団子)
