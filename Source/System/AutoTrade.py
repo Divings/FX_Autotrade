@@ -1532,7 +1532,7 @@ def first_order(trend,shared_state=None):
     bid = prices["bid"]
     ask = prices["ask"]
     spread = ask - bid
-
+    spread = round(spread, 6) 
     logging.info(f"[発注時スプレッド] 現在のスプレッド={spread:.5f}")
     
     if spread > MAX_SPREAD:
@@ -1647,7 +1647,7 @@ def dynamic_filter(adx, rsi, bid, ask):
 
     # スプレッドの計算
     spread = ask - bid
-
+    spread = round(spread, 6) 
     # 時間帯によってしきい値を変更
     if 9 <= hour < 15:
         adx_threshold = 35
@@ -1780,7 +1780,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     last_rsi_state = None
     last_adx_state = None
     
-    SPREAD = 0.05
+    SPREAD = 0.005
     RANGE_START = SPREAD * 1.6   # 0.08
     RANGE_BLOCK = SPREAD * 1.2   # 0.06
     
@@ -1964,7 +1964,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             logging.warning(f"想定外の USD_TIME 値: {USD_TIME}（時間制御なし）")
 
         spread = ask - bid
-        
+        spread = round(spread, 6) 
         if nstop == 0:
             logging.info(f"[スプレッド] 現在のスプレッド={spread:.5f}")
 
@@ -1983,6 +1983,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             ask = prices["ask"]
             
             spread = ask - bid
+            spread = round(spread, 6) 
             if spread > MAX_SPREAD:
                 shared_state["trend"] = None
                 if nstop== 0:
@@ -2299,7 +2300,7 @@ async def monitor_quick_profit(shared_state, stop_event, interval_sec=1):
             ask = prices["ask"]
 
             spread = ask - bid
-            
+            spread = round(spread, 6) 
             if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
                 if spread > MAX_SPREAD:
                     notify_slack(f"[即時利確保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切/利確タイミングに注意")
@@ -2391,7 +2392,8 @@ async def auto_trade():
             ask = prices["ask"]
             bid = prices["bid"]
             
-            spread = abs(ask - bid) 
+            spread = abs(ask - bid)
+            spread = round(spread, 6) 
             last_spread = shared_state.get("last_spread")
             
             if spread > MAX_SPREAD:
