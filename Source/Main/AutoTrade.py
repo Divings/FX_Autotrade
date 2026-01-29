@@ -2079,8 +2079,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if load_conf_FILTER()==1: # 動的フィルタリング有効
                 if is_sideways_sma(close_prices):
                     if n_nonce == 0:
-                        trend = None
-                        shared_state["trend"] = None
+                        # trend = None
+                        # shared_state["trend"] = None
                         logging.info("[横ばい判定:SMA] SMAが収束しているためスキップ")
                         await asyncio.sleep(interval_sec)
                         n_nonce = 1
@@ -2150,10 +2150,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         continue
                 # ボラリティフィルター
                 if is_high_volatility(close_prices) == False:
-                    if trend is None:
-                        msg = f"[スキップ] ボラリティ低のためエントリースキップ"
-                    else:
-                        msg = f"[スキップ] {trend} ボラリティ低のためエントリースキップ"
+                    msg = f"[スキップ] {direction} ボラリティ低のためエントリースキップ"
                     logging.info(msg)
                     notify_slack(msg)
                     continue
@@ -2166,6 +2163,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         notify_slack(f"テストモードのため、エントリースキップ")# ログ出力のみ
                         continue
                     first_order(direction, shared_state)
+                    trend = direction
                     direction = None
                     is_initial = None
                     shared_state["trend"] = None
@@ -2177,7 +2175,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             else:
                 logging.info(f"建玉あり → エントリーせず")
         else:
-            logging.info("初動ではない")
+            pass
 
         if short_stdev > VOL_THRESHOLD_SHORT and long_stdev > VOL_THRESHOLD_LONG:
             
