@@ -75,8 +75,7 @@ def convert_list(prices):
         prices = list(prices)
     return prices
 
-SMA_TANGLE_DIST = 0.015
-
+SMA_TANGLE_DIST = 0.012
 def is_sma_tangled(sma5, sma13):
     return abs(sma5 - sma13) <= SMA_TANGLE_DIST
 
