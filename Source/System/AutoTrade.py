@@ -1770,7 +1770,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global MAX_SPREAD
     high_prices, low_prices, close_prices = load_price_history()
     xstop = 0
-    trend = shared_state.get("trend",None)
+    trend = "未判定" # shared_state.get("trend",None)
     global testmode
     VOL_THRESHOLD_SHORT = 0.006
     VOL_THRESHOLD_LONG = 0.008
