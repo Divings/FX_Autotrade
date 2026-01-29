@@ -116,7 +116,7 @@ def can_sell(closes):
     return sma5 < sma13 < sma25
 
 # 横ばい判定関数(SMA団子)
-def is_sideways_sma(close_prices, threshold=0.015):
+def is_sideways_sma(close_prices, threshold=0.012):
     values = convert_list(close_prices)
 
     if len(values) < 25:
