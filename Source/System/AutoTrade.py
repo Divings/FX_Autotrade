@@ -652,9 +652,12 @@ except:
     _log_last_reset = datetime.now()
 os.makedirs("last_temp", exist_ok=True)
 now = datetime.now()
-
+import shutil
 # フォーマット
 formatted = now.strftime("%Y/%m/%d %H:%M")
+if os.path.exists(f"last_temp/last_temp.txt"):
+    shutil.copyfile("last_temp/last_temp.txt", "last_temp/last_temp.txt.bak")
+    
 with open(f"last_temp/last_temp.txt", "w", encoding="utf-8") as f:
     f.write(f"最終記録 {formatted} \n")
     f.write(temp_dir)
