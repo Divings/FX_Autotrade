@@ -2206,50 +2206,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 dmi_trend_match = True
                       
             logging.info(f"[INFO] DMI TREND {dmi_trend_match}")
-
-            #反転時の即時損切り判定
-            if positions and trend == "SELL" and (macd_bullish or macd_cross_up) or trend == "BUY" and (macd_cross_down):
-                
-                positions = get_positions()
-                prices = get_price()
-                if prices is None:
-                    await asyncio.sleep(interval_sec)
-                    continue
-                if positions:
-                    notify_slack(f"[トレンド] トレンド反転 即時損切り")
-                    ask = prices["ask"]
-                    bid = prices["bid"]
-
-                    for pos in positions:
-                        entry = float(pos["price"])
-                        pid = pos["positionId"]
-                        size_str = int(pos["size"])
-                        side = pos.get("side", "BUY").upper()
-                        close_side = "SELL" if side == "BUY" else "BUY"
-                    
-                    close_order(pid, size_str, close_side)
-                    write_log(close_side, bid)
-            elif positions and trend == "BUY" and macd_cross_down:
-                counts=counts+1
-                notify_slack(f"[トレンド] トレンド反転 即時損切り")
-                positions = get_positions()
-                prices = get_price()
-                if prices is None:
-                    await asyncio.sleep(interval_sec)
-                    continue
-                if positions:
-                    notify_slack(f"[トレンド] トレンド反転 即時損切り")
-                    ask = prices["ask"]
-                    bid = prices["bid"]
-
-                    for pos in positions:
-                        entry = float(pos["price"])
-                        pid = pos["positionId"]
-                        size_str = int(pos["size"])
-                        side = pos.get("side", "BUY").upper()
-                        close_side = "SELL" if side == "BUY" else "BUY"
-                    close_order(pid, size_str, close_side)
-                    write_log(close_side, bid)
                     
         logging.info(f"[判定条件] trend={trend}, macd_cross_up={macd_cross_up}, macd_cross_down={macd_cross_down}, RSI={rsi:.2f}, ADX={adx:.2f}")
         
