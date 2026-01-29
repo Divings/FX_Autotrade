@@ -91,8 +91,8 @@ def can_buy(closes):
     if None in (sma5, sma13, sma25):
         return False
 
-    if is_sma_tangled(sma5, sma13):
-        return False
+    # if is_sma_tangled(sma5, sma13):
+    #    return False
     
     # 上昇トレンド条件
     return sma5 > sma13 > sma25
@@ -109,8 +109,8 @@ def can_sell(closes):
     if None in (sma5, sma13, sma25):
         return False
     
-    if is_sma_tangled(sma5, sma13):
-        return False
+    # if is_sma_tangled(sma5, sma13):
+    #    return False
     
     return sma5 < sma13 < sma25
 
