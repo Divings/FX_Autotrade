@@ -75,7 +75,7 @@ def convert_list(prices):
         prices = list(prices)
     return prices
 
-SMA_TANGLE_DIST = 0.012
+SMA_TANGLE_DIST = 0.015
 def is_sma_tangled(sma5, sma13):
     return abs(sma5 - sma13) <= SMA_TANGLE_DIST
 
@@ -115,7 +115,7 @@ def can_sell(closes):
     return sma5 < sma13 < sma25
 
 # 横ばい判定関数(SMA団子)
-def is_sideways_sma(close_prices, threshold=0.012):
+def is_sideways_sma(close_prices, threshold=0.015):
     values = convert_list(close_prices)
 
     if len(values) < 25:
