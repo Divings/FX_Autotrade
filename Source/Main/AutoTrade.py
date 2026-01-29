@@ -2129,6 +2129,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         # 初動検出
         is_initial, direction = is_trend_initial(candles) # 初動検出関数の呼び出し
+        if (direction=="BUY" or direction=="SELL"):
+            trend = direction
         if is_initial:
             # 簡易フィルター
             positions = get_positions()
