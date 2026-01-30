@@ -1963,7 +1963,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
             else:
                 shared_state["vstop_active"] = False
         else:
-            logging.warning(f"想定外の USD_TIME 値: {USD_TIME}（時間制御なし）")
+            pass
 
         spread = ask - bid
         spread = round(spread, 6) 
