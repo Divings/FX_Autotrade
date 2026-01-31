@@ -35,6 +35,7 @@ from state_utils import (
     load_price_history,
     save_price_history
 )
+
 from Price import extract_price_from_response
 from logs import write_log
 from Assets import assets
@@ -52,6 +53,15 @@ def load_conf_FILTER():
     log_level = config.getint("RANGE_FILTER", "enable", fallback=1)# デフォルトは有効(1)
     return log_level
 
+def load_conf_TANGLE_FILTER():
+    import configparser
+    
+    # 設定ファイル読み込み
+    config = configparser.ConfigParser()
+    config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
+    log_level = config.getint("TANGLE_FILTER", "enable", fallback=0)# デフォルトは有効(1)
+    return log_level
+
 # events_df = pd.DataFrame(columns=["datetime", "impact_level", "event"])
 skip_until = None
 
@@ -62,7 +72,6 @@ def sma(values, period):
     if len(values) < period:
         return None
     return sum(values[-period:]) / period
-
 
 # リスト変換関数
 def convert_list(prices):
@@ -90,9 +99,10 @@ def can_buy(closes):
 
     if None in (sma5, sma13, sma25):
         return False
-
-    # if is_sma_tangled(sma5, sma13):
-    #    return False
+    
+    if load_conf_TANGLE_FILTER()==1:
+        if is_sma_tangled(sma5, sma13):
+            return False
     
     # 上昇トレンド条件
     return sma5 > sma13 > sma25
@@ -109,8 +119,9 @@ def can_sell(closes):
     if None in (sma5, sma13, sma25):
         return False
     
-    # if is_sma_tangled(sma5, sma13):
-    #    return False
+    if load_conf_TANGLE_FILTER()==1:
+        if is_sma_tangled(sma5, sma13):
+            return False
     
     return sma5 < sma13 < sma25
 
