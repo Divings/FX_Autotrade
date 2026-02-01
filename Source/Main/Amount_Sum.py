@@ -8,24 +8,42 @@ from decimal import Decimal, InvalidOperation
 import sqlite3
 from pathlib import Path
 
-def get_today_total_amount(
-    api_key,
-    secret_key,
-    params = None,
-    jst_date =None,
-    return_count = False,   # Trueなら(合計, 件数)を返す
-):
-    end_point = "https://forex-api.coin.z.com/private"
-    path = "/v1/executions"
-    if params is None:
-        params = {"symbol": "USD_JPY",
-    "count": 100}
+import requests
+import hmac
+import hashlib
+import time
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
+from decimal import Decimal, InvalidOperation
+from typing import Optional, Dict, Any, Union, Tuple
 
+
+def get_today_total_lossgain_latest(
+    api_key: str,
+    secret_key: str,
+    symbol: str,
+    jst_date: Optional[date] = None,          # Noneなら今日(JST)
+    count: int = 100,                          # latestExecutions の最大が基本100
+    end_point: str = "https://forex-api.coin.z.com/private",
+    return_count: bool = False,                # Trueなら(合計, 件数)を返す
+    close_only: bool = False,                  # Trueなら settleType=="CLOSE" だけ合計
+) -> Union[Decimal, Tuple[Decimal, int]]:
+    """
+    /v1/latestExecutions から当日(JST)の lossGain 合計を Decimal で返す。
+    - 返ってこない（list空）なら 0
+    - return_count=True なら (合計, 件数)
+    - close_only=True なら決済（CLOSE）だけを集計（当日決済損益っぽくしたい場合に便利）
+    """
     JST = ZoneInfo("Asia/Tokyo")
     target_date = jst_date or datetime.now(JST).date()
 
-    api_timestamp = f"{int(time.mktime(datetime.now().timetuple()))}000"
+    path = "/v1/latestExecutions"
     method = "GET"
+
+    # 署名用タイムスタンプ（ミリ秒）
+    api_timestamp = f"{int(time.mktime(datetime.now().timetuple()))}000"
+
+    # 署名生成
     text = api_timestamp + method + path
     sign = hmac.new(secret_key.encode("ascii"), text.encode("ascii"), hashlib.sha256).hexdigest()
 
@@ -35,25 +53,41 @@ def get_today_total_amount(
         "API-SIGN": sign
     }
 
+    # 念のため count の下限上限をクリップ（API側制限に寄せる）
+    if count is None:
+        count = 100
+    count = int(count)
+    if count <= 0:
+        count = 1
+    if count > 100:
+        count = 100
+
+    params: Dict[str, Any] = {
+        "symbol": symbol,
+        "count": count
+    }
+
     res = requests.get(end_point + path, headers=headers, params=params, timeout=30)
     res.raise_for_status()
-    data = res.json()
+    payload = res.json()
 
-    exec_list = data.get("data", {}).get("list") or []  # Noneでも空でもOKにする
-
-    # 返ってこなかった（listが空）なら、0を返す
+    exec_list = payload.get("data", {}).get("list") or []
     if not exec_list:
         return (Decimal("0"), 0) if return_count else Decimal("0")
 
     total = Decimal("0")
-    count = 0
+    matched = 0
 
     for item in exec_list:
+        # 決済だけに限定したい場合
+        if close_only and item.get("settleType") != "CLOSE":
+            continue
+
         ts = item.get("timestamp")
-        amt_str = item.get("amount", "0")
         if not ts:
             continue
 
+        # UTC(Z) -> JST
         try:
             dt_utc = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         except ValueError:
@@ -63,13 +97,15 @@ def get_today_total_amount(
         if dt_jst.date() != target_date:
             continue
 
+        lg_str = item.get("lossGain", "0")
         try:
-            total += Decimal(str(amt_str))
-            count += 1
+            total += Decimal(str(lg_str))
+            matched += 1
         except (InvalidOperation, TypeError):
             continue
 
-    return (total, count) if return_count else total
+    return (total, matched) if return_count else total
+
 
 def init_sqlite() -> sqlite3.Connection:
     DB_PATH = "daily_amount.db"
@@ -137,3 +173,4 @@ def get_yesterday_total_amount_from_sqlite(SYMBOL):
         return row[0] if row else None
     finally:
         conn.close()
+
