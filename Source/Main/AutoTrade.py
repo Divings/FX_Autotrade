@@ -20,7 +20,7 @@ import statistics
 import pandas as pd
 import statistics
 import signal
-from Amount_Sum import get_today_total_amount, save_daily_summary,get_yesterday_total_amount_from_sqlite
+from Amount_Sum import get_today_total_lossgain_latest, save_daily_summary,get_yesterday_total_amount_from_sqlite
 from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
@@ -44,8 +44,6 @@ from configs import load_weekconfigs
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-
-
 
 def load_conf_FILTER():
     import configparser
@@ -86,7 +84,6 @@ def convert_list(prices):
     if isinstance(prices, deque):
         prices = list(prices)
     return prices
-
 
 def load_conf_TANGLEDIST_FILTER():
     import configparser
@@ -396,7 +393,6 @@ def download_two_files(base_url, download_dir):
         with open(download_path, 'wb') as f:
             shutil.copyfileobj(response.raw, f)
                 
-
 import os
 import shutil
 import requests
@@ -1889,7 +1885,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if TIME_STOP != 0 and (now.hour < TIME_STOP or(now.hour == TIME_STOP and now.minute == 0)):
             if m == 0:
                 param = {"symbol": SYMBOL}
-                total = get_today_total_amount(api_key=API_KEY,secret_key=API_SECRET,params=param)
+                total = get_today_total_lossgain_latest(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL)
                 save_daily_summary(SYMBOL,total)
                 notify_slack(f" 取引抑止時刻になりました、取引を中断します。\n 本日の累計損益は{total}円です。")
                 values = failSafe(values)
@@ -2442,7 +2438,7 @@ async def auto_trade():
                         shared_state["entry_time"] = time.time()
             await asyncio.sleep(CHECK_INTERVAL)
     except SystemExit as e:
-        notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
+        # notify_slack(f"auto_trade()が終了 {type(e).__name__}: {e}")
         try:
             values = failSafe(values)
         except:
