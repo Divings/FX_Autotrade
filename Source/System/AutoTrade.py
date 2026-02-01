@@ -20,7 +20,7 @@ import statistics
 import pandas as pd
 import statistics
 import signal
-from Amount_Sum import get_today_total_amount
+from Amount_Sum import get_today_total_amount, save_daily_summary,get_yesterday_total_amount_from_sqlite
 from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
@@ -44,6 +44,8 @@ from configs import load_weekconfigs
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+
+
 
 def load_conf_FILTER():
     import configparser
@@ -1019,6 +1021,13 @@ USD_TIME = config["USD_TIME"]
 MAX_Stop = config["MAX_Stop"]
 LOSS_STOP= config["LOSS_STOP"] 
 
+tod = get_yesterday_total_amount_from_sqlite(SYMBOL)
+if tod!=None:
+    notify_slack(f"昨日の総損益は {tod} 円です")
+else:
+    notify_slack("昨日の総損益データは見つかりませんでした")
+    save_daily_summary(SYMBOL,0) # データがない場合は0で初期化
+    
 # 夜間判定関数
 def is_night_time():
     now = datetime.now().hour
@@ -1879,7 +1888,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         if TIME_STOP != 0 and (now.hour < TIME_STOP or(now.hour == TIME_STOP and now.minute == 0)):
             if m == 0:
-                total = get_today_total_amount(api_key=API_KEY,secret_key=API_SECRET,params={"symbol": "USD_JPY"})
+                param = {"symbol": SYMBOL}
+                total = get_today_total_amount(api_key=API_KEY,secret_key=API_SECRET,params=param)
+                save_daily_summary(SYMBOL,total)
                 notify_slack(f" 取引抑止時刻になりました、取引を中断します。\n 本日の累計損益は{total}円です。")
                 values = failSafe(values)
                 m = 1

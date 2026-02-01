@@ -2,9 +2,11 @@ import requests
 import hmac
 import hashlib
 import time
-from datetime import datetime, date
+from datetime import datetime, date,timedelta
 from zoneinfo import ZoneInfo
 from decimal import Decimal, InvalidOperation
+import sqlite3
+from pathlib import Path
 
 def get_today_total_amount(
     api_key,
@@ -68,3 +70,70 @@ def get_today_total_amount(
             continue
 
     return (total, count) if return_count else total
+
+def init_sqlite() -> sqlite3.Connection:
+    DB_PATH = "daily_amount.db"
+    conn = sqlite3.connect(Path(DB_PATH))
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS daily_amount_summary (
+            trade_date   TEXT NOT NULL,   -- 'YYYY-MM-DD' (JST)
+            symbol       TEXT NOT NULL,   -- 例: 'USD_JPY'
+            total_amount TEXT NOT NULL,   -- Decimalを文字列保存
+            saved_at     TEXT NOT NULL,   -- ISO8601 (JST)
+            PRIMARY KEY (trade_date, symbol)
+        )
+        """
+    )
+    conn.commit()
+    return conn
+
+
+def save_daily_summary(SYMBOL,total_amount: Decimal) -> None:
+    JST = ZoneInfo("Asia/Tokyo")
+    trade_date = datetime.now(JST).date().isoformat()
+    saved_at = datetime.now(JST).isoformat()
+
+    conn = init_sqlite()
+    try:
+        conn.execute(
+            """
+            INSERT INTO daily_amount_summary (trade_date, symbol, total_amount, saved_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(trade_date, symbol) DO UPDATE SET
+                total_amount=excluded.total_amount,
+                saved_at=excluded.saved_at
+            """,
+            (trade_date, SYMBOL, str(total_amount), saved_at)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_yesterday_total_amount_from_sqlite(SYMBOL):
+    """
+    前日（JST）の total_amount だけ返す。
+    無ければ None。
+    ※ total_amount はDBに文字列で保存してる想定なので、戻り値も str。
+    """
+    JST = ZoneInfo("Asia/Tokyo")
+    yesterday = (datetime.now(JST).date() - timedelta(days=1)).isoformat()
+
+    conn = init_sqlite()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT total_amount
+            FROM daily_amount_summary
+            WHERE trade_date = ? AND symbol = ?
+            """,
+            (yesterday, SYMBOL)
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
