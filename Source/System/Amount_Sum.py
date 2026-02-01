@@ -7,14 +7,14 @@ from zoneinfo import ZoneInfo
 from decimal import Decimal, InvalidOperation
 
 def get_today_total_amount(
-    api_key: str,
-    secret_key: str,
-    params: dict | None = None,
-    jst_date=None,
-    return_count: bool = False,   # Trueなら(合計, 件数)を返す
+    api_key,
+    secret_key,
+    params = None,
+    jst_date =None,
+    return_count = False,   # Trueなら(合計, 件数)を返す
 ):
-    end_point: str = "https://forex-api.coin.z.com/private"
-    path: str = "/v1/executions"
+    end_point = "https://forex-api.coin.z.com/private"
+    path = "/v1/executions"
     if params is None:
         params = {"symbol": "USD_JPY",
     "count": 100}
