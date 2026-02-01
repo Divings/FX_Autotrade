@@ -20,6 +20,7 @@ import statistics
 import pandas as pd
 import statistics
 import signal
+from Amount_Sum import get_today_total_amount
 from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
@@ -1878,7 +1879,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
         if TIME_STOP != 0 and (now.hour < TIME_STOP or(now.hour == TIME_STOP and now.minute == 0)):
             if m == 0:
-                notify_slack(" 取引抑止時刻になりました、取引を中断します")
+                total = get_today_total_amount(api_key=API_KEY,secret_key=API_SECRET,params={"symbol": "USD_JPY"})
+                notify_slack(f" 取引抑止時刻になりました、取引を中断します。\n 本日の累計損益は{total}円です。")
                 values = failSafe(values)
                 m = 1
             continue

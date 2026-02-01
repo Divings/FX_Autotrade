@@ -9,6 +9,8 @@ BLOCK_AFTER_MIN = 15
 
 def write_log(CSV_PATH):
     path="/opt/Innovations/System/news_block_log.txt"
+    if os.path.exists(path)==False:
+        return 0
     with open(path, "a") as f:
         f.write(f"{datetime.now().isoformat()}\n")
         f.write(f"CSV_PATH: {CSV_PATH}\n")
