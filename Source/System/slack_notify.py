@@ -275,3 +275,5 @@ def notify_slack(message: str):
             print(f"[通知例外] {e}")
         else:
             values=1
+    except ValueError:
+        pass
