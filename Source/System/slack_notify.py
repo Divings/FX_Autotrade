@@ -276,4 +276,7 @@ def notify_slack(message: str):
         else:
             values=1
     except ValueError:
-        pass
+        if values==0: #エラー時の通知抑止
+            print(f"[通知例外] {e}")
+        else:
+            values=1
