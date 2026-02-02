@@ -140,6 +140,8 @@ def _append_env_if_needed(key: str, value: str, env_path: str = ".env"):
     except Exception as e:
         print(f"[ENV書き込み警告] {key} の保存に失敗: {e}")
 
+values=0 #エラー時の通知抑止用変数
+
 # メッセージに応じた色分け
 def _message_color_for_slack(message: str) -> str:
     """ 元ロジックの色分け """
@@ -232,6 +234,7 @@ def notify_slack(message: str):
     直前と同じメッセージは「通知せず」、メッセージ本文を notification_log.txt へ追記。
     クールダウン抑止時も本文をログへ残す。
     """
+    global values
     global msg_history
     time.sleep(1.2)  # 連続送信対策のインターバル
 
@@ -268,4 +271,7 @@ def notify_slack(message: str):
         _write_last_hash_to_file(msg_hash)
 
     except Exception as e:
-        print(f"[通知例外] {e}")
+        if values==0: #エラー時の通知抑止
+            print(f"[通知例外] {e}")
+        else:
+            values=1
