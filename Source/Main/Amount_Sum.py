@@ -12,100 +12,76 @@ import requests
 import hmac
 import hashlib
 import time
-from datetime import datetime, date
-from zoneinfo import ZoneInfo
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Optional, Dict, Any, Union, Tuple
+from typing import Dict, Any, Tuple
+import json
+from typing import Optional
 
-
-def get_today_total_lossgain_latest(
+def sum_yesterday_realized_pnl_at_midnight(
     api_key: str,
     secret_key: str,
     symbol: str,
-    jst_date: Optional[date] = None,          # Noneなら今日(JST)
-    count: int = 100,                          # latestExecutions の最大が基本100
+    count: int = 100,
     end_point: str = "https://forex-api.coin.z.com/private",
-    return_count: bool = False,                # Trueなら(合計, 件数)を返す
-    close_only: bool = False,                  # Trueなら settleType=="CLOSE" だけ合計
-) -> Union[Decimal, Tuple[Decimal, int]]:
+    test_json_path: Optional[str] = None,  # ★追加：テスト時にJSONファイルを使う
+) -> Tuple[Decimal, int]:
     """
-    /v1/latestExecutions から当日(JST)の lossGain 合計を Decimal で返す。
-    - 返ってこない（list空）なら 0
-    - return_count=True なら (合計, 件数)
-    - close_only=True なら決済（CLOSE）だけを集計（当日決済損益っぽくしたい場合に便利）
+    00:00に呼ぶ前提で、/v1/latestExecutions の生データから
+    settleType == "CLOSE" の lossGain を合計して返す。
+
+    日付フィルターなし（00:00〜6:00は取引しない前提のため）
+    戻り値: (合計Decimal, 対象件数int)
     """
-    JST = ZoneInfo("Asia/Tokyo")
-    target_date = jst_date or datetime.now(JST).date()
+    # ----------------------------
+    # ★テスト：ファイルから payload を読む
+    # ----------------------------
+    if test_json_path:
+        with open(test_json_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    else:
+        path = "/v1/latestExecutions"
+        method = "GET"
 
-    path = "/v1/latestExecutions"
-    method = "GET"
+        api_timestamp = f"{int(time.mktime(datetime.now().timetuple()))}000"
+        text = api_timestamp + method + path
+        sign = hmac.new(secret_key.encode("ascii"), text.encode("ascii"), hashlib.sha256).hexdigest()
 
-    # 署名用タイムスタンプ（ミリ秒）
-    api_timestamp = f"{int(time.mktime(datetime.now().timetuple()))}000"
+        headers = {
+            "API-KEY": api_key,
+            "API-TIMESTAMP": api_timestamp,
+            "API-SIGN": sign
+        }
 
-    # 署名生成
-    text = api_timestamp + method + path
-    sign = hmac.new(secret_key.encode("ascii"), text.encode("ascii"), hashlib.sha256).hexdigest()
+        count = int(count)
+        if count < 1:
+            count = 1
+        if count > 100:
+            count = 100
 
-    headers = {
-        "API-KEY": api_key,
-        "API-TIMESTAMP": api_timestamp,
-        "API-SIGN": sign
-    }
+        params: Dict[str, Any] = {"symbol": symbol, "count": count}
 
-    # 念のため count の下限上限をクリップ（API側制限に寄せる）
-    if count is None:
-        count = 100
-    count = int(count)
-    if count <= 0:
-        count = 1
-    if count > 100:
-        count = 100
+        res = requests.get(end_point + path, headers=headers, params=params, timeout=30)
+        res.raise_for_status()
+        payload = res.json()
 
-    params: Dict[str, Any] = {
-        "symbol": symbol,
-        "count": count
-    }
-
-    res = requests.get(end_point + path, headers=headers, params=params, timeout=30)
-    res.raise_for_status()
-    payload = res.json()
-
-    exec_list = payload.get("data", {}).get("list") or []
-    if not exec_list:
-        return (Decimal("0"), 0) if return_count else Decimal("0")
+    items = payload.get("data", {}).get("list") or []
 
     total = Decimal("0")
     matched = 0
 
-    for item in exec_list:
-        # 決済だけに限定したい場合
-        if close_only and item.get("settleType") != "CLOSE":
+    for item in items:
+        # 決済だけ
+        if item.get("settleType") != "CLOSE":
             continue
 
-        ts = item.get("timestamp")
-        if not ts:
-            continue
-
-        # UTC(Z) -> JST
         try:
-            dt_utc = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-
-        dt_jst = dt_utc.astimezone(JST)
-        if dt_jst.date() != target_date:
-            continue
-
-        lg_str = item.get("lossGain", "0")
-        try:
-            total += Decimal(str(lg_str))
+            total += Decimal(str(item.get("lossGain", "0")))
             matched += 1
         except (InvalidOperation, TypeError):
             continue
 
-    return (total, matched) if return_count else total
-
+    return total, matched
 
 def init_sqlite() -> sqlite3.Connection:
     DB_PATH = "daily_amount.db"

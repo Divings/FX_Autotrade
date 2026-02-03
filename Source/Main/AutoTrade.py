@@ -20,7 +20,7 @@ import statistics
 import pandas as pd
 import statistics
 import signal
-from Amount_Sum import get_today_total_lossgain_latest, save_daily_summary,get_yesterday_total_amount_from_sqlite
+from Amount_Sum import sum_yesterday_realized_pnl_at_midnight, save_daily_summary,get_yesterday_total_amount_from_sqlite
 from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
@@ -1044,6 +1044,10 @@ def is_high_volatility(prices, threshold=VOL_THRESHOLD):
     except statistics.StatisticsError:
         return False
 
+def is_low_volatility_legacy(prices):
+    # 既存 high 判定を反転して low 判定にする（既存関数はそのまま）
+    return not is_high_volatility(prices, threshold=0.0030)
+
 # ボラティリティに応じたMAX_LOSS調整関数
 import copy
 Buffer = copy.copy(MAX_LOSS)
@@ -1885,7 +1889,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if TIME_STOP != 0 and (now.hour < TIME_STOP or(now.hour == TIME_STOP and now.minute == 0)):
             if m == 0:
                 param = {"symbol": SYMBOL}
-                total = get_today_total_lossgain_latest(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL)
+                total,a = sum_yesterday_realized_pnl_at_midnight(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL)
                 save_daily_summary(SYMBOL,total)
                 notify_slack(f" 取引抑止時刻になりました、取引を中断します。\n 本日の累計損益は{total}円です。")
                 values = failSafe(values)
@@ -2176,7 +2180,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                         logging.info("SELL一致せずスキップ")
                         continue
                 # ボラリティフィルター
-                if is_high_volatility(close_prices) == False:
+                if is_low_volatility_legacy(close_prices):
                     msg = f"[スキップ] {direction} ボラリティ低のためエントリースキップ"
                     logging.info(msg)
                     notify_slack(msg)
