@@ -18,52 +18,78 @@ from typing import Dict, Any, Tuple
 import json
 from typing import Optional
 
-def sum_yesterday_realized_pnl_at_midnight(
+import requests
+import hmac
+import hashlib
+import time
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
+from decimal import Decimal, InvalidOperation
+from typing import Dict, Any, Optional, Tuple
+
+JST = ZoneInfo("Asia/Tokyo")
+
+
+def _to_decimal(x) -> Decimal:
+    try:
+        return Decimal(str(x))
+    except (InvalidOperation, TypeError):
+        return Decimal("0")
+
+
+def _ts_to_jst_date(ts: str) -> Optional[date]:
+    if not ts:
+        return None
+    try:
+        dt_utc = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt_utc.astimezone(JST).date()
+
+
+def sum_lossgain_today_from_api(
     api_key: str,
     secret_key: str,
     symbol: str,
+    target_date: Optional[date] = None,    # Noneなら「今日(JST)」
+    close_only: bool = True,              # 当日決済損益なら True 推奨
+    include_fee: bool = False,            # 手数料も足すなら True
     count: int = 100,
     end_point: str = "https://forex-api.coin.z.com/private",
-    test_json_path: Optional[str] = None,  # ★追加：テスト時にJSONファイルを使う
 ) -> Tuple[Decimal, int]:
     """
-    00:00に呼ぶ前提で、/v1/latestExecutions の生データから
-    settleType == "CLOSE" の lossGain を合計して返す。
-
-    日付フィルターなし（00:00〜6:00は取引しない前提のため）
-    戻り値: (合計Decimal, 対象件数int)
+    /v1/latestExecutions をAPIで取得して、
+    timestamp をJSTに変換した target_date（デフォルト:今日JST）の行だけ集計する。
+    戻り値: (合計Decimal, 対象件数)
     """
-    # ----------------------------
-    # ★テスト：ファイルから payload を読む
-    # ----------------------------
-    if test_json_path:
-        with open(test_json_path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-    else:
-        path = "/v1/latestExecutions"
-        method = "GET"
+    if target_date is None:
+        target_date = datetime.now(JST).date()
 
-        api_timestamp = f"{int(time.mktime(datetime.now().timetuple()))}000"
-        text = api_timestamp + method + path
-        sign = hmac.new(secret_key.encode("ascii"), text.encode("ascii"), hashlib.sha256).hexdigest()
+    # count は最大100想定
+    count = int(count)
+    if count < 1:
+        count = 1
+    if count > 100:
+        count = 100
 
-        headers = {
-            "API-KEY": api_key,
-            "API-TIMESTAMP": api_timestamp,
-            "API-SIGN": sign
-        }
+    path = "/v1/latestExecutions"
+    method = "GET"
+    api_timestamp = f"{int(time.mktime(datetime.now().timetuple()))}000"
 
-        count = int(count)
-        if count < 1:
-            count = 1
-        if count > 100:
-            count = 100
+    text = api_timestamp + method + path
+    sign = hmac.new(secret_key.encode("ascii"), text.encode("ascii"), hashlib.sha256).hexdigest()
 
-        params: Dict[str, Any] = {"symbol": symbol, "count": count}
+    headers = {
+        "API-KEY": api_key,
+        "API-TIMESTAMP": api_timestamp,
+        "API-SIGN": sign
+    }
 
-        res = requests.get(end_point + path, headers=headers, params=params, timeout=30)
-        res.raise_for_status()
-        payload = res.json()
+    params: Dict[str, Any] = {"symbol": symbol, "count": count}
+
+    res = requests.get(end_point + path, headers=headers, params=params, timeout=30)
+    res.raise_for_status()
+    payload = res.json()
 
     items = payload.get("data", {}).get("list") or []
 
@@ -71,17 +97,38 @@ def sum_yesterday_realized_pnl_at_midnight(
     matched = 0
 
     for item in items:
-        # 決済だけ
-        if item.get("settleType") != "CLOSE":
+        # 日付（JST）でフィルタ
+        d = _ts_to_jst_date(item.get("timestamp"))
+        if d != target_date:
             continue
 
-        try:
-            total += Decimal(str(item.get("lossGain", "0")))
-            matched += 1
-        except (InvalidOperation, TypeError):
+        # 決済だけ
+        if close_only and item.get("settleType") != "CLOSE":
             continue
+
+        total += _to_decimal(item.get("lossGain", "0"))
+        if include_fee:
+            total += _to_decimal(item.get("fee", "0"))
+
+        matched += 1
 
     return total, matched
+
+def sum_yesterday_realized_pnl_at_midnight(
+    api_key: str,
+    secret_key: str,
+    symbol: str,
+    target_date: Optional[date] = None
+) -> Tuple[Decimal, int]:
+    pnl, cnt = sum_lossgain_today_from_api(
+        api_key=api_key,
+        secret_key=secret_key,
+        symbol=symbol,
+        close_only=True,
+        include_fee=False,
+        target_date=target_date
+    )
+    return pnl, cnt
 
 def init_sqlite() -> sqlite3.Connection:
     DB_PATH = "daily_amount.db"
