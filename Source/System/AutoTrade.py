@@ -10,6 +10,7 @@ import json
 import requests
 import time
 import csv
+from zoneinfo import ZoneInfo
 import logging
 from datetime import datetime,timedelta
 from dotenv import load_dotenv
