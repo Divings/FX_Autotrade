@@ -11,7 +11,7 @@ import requests
 import time
 import csv
 import logging
-from datetime import datetime
+from datetime import datetime,timedelta
 from dotenv import load_dotenv
 from slack_notify import notify_slack
 import sys
@@ -44,6 +44,9 @@ from configs import load_weekconfigs
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+
+JST = ZoneInfo("Asia/Tokyo")
+STOP_ENV = 0 # 取引中断判定用変数
 
 def load_conf_FILTER():
     import configparser
@@ -715,6 +718,7 @@ except Exception as e:
     print(f"ログ初期化時にエラー: {e}")
 notify_slack("自動売買システム起動")
 
+
 # == 記録済みデータ読み込み ===
 shared_state = load_state()
 reset_notifications(shared_state)
@@ -743,7 +747,8 @@ DEFAULT_CONFIG = {
     "SYMBOL":"USD_JPY",
     "USD_TIME":0,
     "MAX_Stop":30,
-    "LOSS_STOP":0
+    "LOSS_STOP":0,
+    "YDAY_UP_STOP":50
 }
 
 # グローバル変数初期化
@@ -1016,14 +1021,8 @@ SKIP_MODE = config["SKIP_MODE"] # 差分が小さい場合にスキップする�
 USD_TIME = config["USD_TIME"]
 MAX_Stop = config["MAX_Stop"]
 LOSS_STOP= config["LOSS_STOP"] 
+YDAY_STOP= config["YDAY_UP_STOP"]
 
-tod = get_yesterday_total_amount_from_sqlite(SYMBOL)
-if tod!=None:
-    notify_slack(f"昨日の総損益は {tod} 円です")
-else:
-    notify_slack("昨日の総損益データは見つかりませんでした")
-    save_daily_summary(SYMBOL,0) # データがない場合は0で初期化
-    
 # 夜間判定関数
 def is_night_time():
     now = datetime.now().hour
@@ -1123,6 +1122,41 @@ API_KEY = api_data.strip()
 API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
+
+
+today_pnl=0
+yesterday = (datetime.now(JST) - timedelta(days=1)).date()
+total,a= sum_yesterday_realized_pnl_at_midnight(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL,target_date=yesterday)
+if total==0:
+    notify_slack(f"昨日の総損益は {total} 円です")
+    today_pnl=total
+else:
+    notify_slack("昨日の総損益データは見つかりませんでした")
+    save_daily_summary(SYMBOL,0) # データがない場合は0で初期化
+
+
+
+import asyncio
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from decimal import Decimal
+from typing import Callable, Dict, Any, Tuple
+
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from decimal import Decimal
+
+# JST = ZoneInfo("Asia/Tokyo")
+
+def profit_lock_check(api_key, secret_key, symbol, n_yen):
+    now = datetime.now(JST)
+    today = now.date()
+    yesterday = (now - timedelta(days=1)).date()
+
+    today_pnl, _ = sum_yesterday_realized_pnl_at_midnight(api_key, secret_key, symbol, target_date=today, close_only=True)
+    y_pnl, _     = sum_yesterday_realized_pnl_at_midnight(api_key, secret_key, symbol, target_date=yesterday, close_only=True)
+
+    return today_pnl >= (y_pnl + Decimal(n_yen))
 
 # === 取引余力確認と初期残高保存 ===
 out = assets(API_KEY,API_SECRET)
@@ -1489,6 +1523,7 @@ rootOrderIds = None
 # === ポジション決済 ===
 def close_order(position_id, size, side):
     global rootOrderIds
+    global STOP_ENV
     path = "/v1/closeOrder"
     method = "POST"
     timestamp = str(int(time.time() * 1000))  # より精度の高いミリ秒
@@ -1539,7 +1574,11 @@ def close_order(position_id, size, side):
         # 遅延が長い場合ログ記録
         if elapsed > 0.5:
             logging.warning(f"[遅延警告] 決済APIに {elapsed:.2f} 秒かかりました")
-
+        
+        halt = profit_lock_check(API_KEY, API_SECRET, SYMBOL, YDAY_STOP)
+        if halt==True:
+            notify_slack("[利益確定ロック] 当日の利益が前日を上回ったため、新規注文を停止します")
+            STOP_ENV = 1    
         return data
     except requests.exceptions.Timeout:
         notify_slack("[注文] タイムアウト（3秒）")
@@ -1792,6 +1831,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     global first_start
     global candle_buffer
     global price_buffer
+    global STOP_ENV
     mcv = 0
     global MAX_SPREAD
     high_prices, low_prices, close_prices = load_price_history()
@@ -1889,11 +1929,13 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if TIME_STOP != 0 and (now.hour < TIME_STOP or(now.hour == TIME_STOP and now.minute == 0)):
             if m == 0:
                 param = {"symbol": SYMBOL}
-                total,a = sum_yesterday_realized_pnl_at_midnight(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL)
+                yesterday = (datetime.now(JST) - timedelta(days=1)).date()
+                total,a = sum_yesterday_realized_pnl_at_midnight(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL,target_date=yesterday)
                 save_daily_summary(SYMBOL,total)
                 notify_slack(f" 取引抑止時刻になりました、取引を中断します。\n 本日の累計損益は{total}円です。")
                 values = failSafe(values)
                 m = 1
+                STOP_ENV = 0
             continue
         else:
             m = 0
@@ -2188,6 +2230,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
                 # エントリー条件判定
                 if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
+                    if STOP_ENV == 1:
+                        logging.info(f"[停止] 利益確定ロック中のため新規注文停止")
+                        continue
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
                     if testmode == 1:                        
