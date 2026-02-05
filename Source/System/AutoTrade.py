@@ -68,7 +68,6 @@ def load_conf_HOLD():
     DATA = config.getint("HOLD", "MAX_HOLD", fallback=420)# デフォルトは有効(1)
     return HOLD,DATA
 
-
 def load_conf_TANGLE_FILTER():
     import configparser
     
@@ -108,7 +107,6 @@ def load_conf_TANGLEDIST_FILTER():
     config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
     log_level = config.getfloat("TANGLE_FILTER", "SMA_TANGLE_DIST", fallback=0.015)# デフォルトは有効(1)
     return log_level
-
 
 SMA_TANGLE_DIST = load_conf_TANGLEDIST_FILTER()
 def is_sma_tangled(sma5, sma13):
@@ -1170,6 +1168,22 @@ def profit_lock_check(api_key, secret_key, symbol, n_yen):
 
     return today_pnl >= (y_pnl + Decimal(n_yen))
 
+def loss_lock_check(api_key, secret_key, symbol, n_yen):
+    now = datetime.now(JST)
+    today = now.date()
+    yesterday = (now - timedelta(days=1)).date()
+
+    today_pnl, _ = sum_yesterday_realized_pnl_at_midnight(
+        api_key, secret_key, symbol, target_date=today, close_only=True
+    )
+    y_pnl, _ = sum_yesterday_realized_pnl_at_midnight(
+        api_key, secret_key, symbol, target_date=yesterday, close_only=True
+    )
+
+    # 昨日比で -n円以上悪化したら True（= 日次負け停止）
+    return today_pnl <= (y_pnl - Decimal(n_yen))
+
+
 # === 取引余力確認と初期残高保存 ===
 out = assets(API_KEY,API_SECRET)
 try:
@@ -1588,7 +1602,11 @@ def close_order(position_id, size, side):
             logging.warning(f"[遅延警告] 決済APIに {elapsed:.2f} 秒かかりました")
         
         halt = profit_lock_check(API_KEY, API_SECRET, SYMBOL, YDAY_STOP)
-        if halt==True:
+        loss = loss_lock_check(API_KEY, API_SECRET, SYMBOL, YDAY_STOP)
+        if loss == True:
+            notify_slack("[損失確定ロック] 当日の損失が前日を下回ったため、新規注文を停止します")
+            STOP_ENV = 2
+        elif halt == True:
             notify_slack("[利益確定ロック] 当日の利益が前日を上回ったため、新規注文を停止します")
             STOP_ENV = 1    
         return data
@@ -2244,6 +2262,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
                     if STOP_ENV == 1:
                         logging.info(f"[停止] 利益確定ロック中のため新規注文停止")
+                        continue
+                    if STOP_ENV == 2:
+                        logging.info(f"[停止] 損失確定ロック中のため新規注文停止")
                         continue
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
