@@ -118,13 +118,14 @@ def sum_yesterday_realized_pnl_at_midnight(
     api_key: str,
     secret_key: str,
     symbol: str,
-    target_date: Optional[date] = None
+    target_date: Optional[date] = None,
+    close_only: bool = True
 ) -> Tuple[Decimal, int]:
     pnl, cnt = sum_lossgain_today_from_api(
         api_key=api_key,
         secret_key=secret_key,
         symbol=symbol,
-        close_only=True,
+        close_only=close_only,
         include_fee=False,
         target_date=target_date
     )
