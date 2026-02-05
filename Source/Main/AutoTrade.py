@@ -58,6 +58,17 @@ def load_conf_FILTER():
     log_level = config.getint("RANGE_FILTER", "enable", fallback=1)# デフォルトは有効(1)
     return log_level
 
+def load_conf_HOLD():
+    import configparser
+    
+    # 設定ファイル読み込み
+    config = configparser.ConfigParser()
+    config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
+    HOLD = config.getint("HLD", "enable", fallback=1)# デフォルトは有効(1)
+    DATA = config.getint("HLD", "MAX_HOLD", fallback=420)# デフォルトは有効(1)
+    return HOLD,DATA
+
+
 def load_conf_TANGLE_FILTER():
     import configparser
     
@@ -790,7 +801,7 @@ def reverse_side(side: str) -> str:
 # == 建玉保有状況監視タスク ==
 async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
     last_notified = {}  # 建玉ごとの通知済みprofit記録
-
+    status,MAX_HOLD = load_conf_HOLD()
     while not stop_event.is_set():
         positions = get_positions()
         prices = get_price()
@@ -807,14 +818,13 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             entry = float(pos["price"])
             size = int(pos["size"])
             side = pos.get("side", "BUY").upper()
-            MAX_HOLD = 420 # 300
             EXTENDABLE_LOSS = -10  # 許容する微損（円）
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             if elapsed > MAX_HOLD:
-                # if shared_state.get("firsts")==True and USD_TIME==1:
-                #    logging.info("延長 保有時間超過だが初動検知のためスキップ")
-                #    return
+                if status == 0:
+                    logging.info("延長 保有時間超過だが保有スキップ設定無効のため保持")
+                    return
                 if profit > EXTENDABLE_LOSS and shared_state.get("trend") == side:
                     logging.info("[延長] 保有時間超過だがトレンド継続中のため保持")
                     return  # 決済せず延長
