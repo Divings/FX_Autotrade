@@ -21,7 +21,7 @@ import statistics
 import pandas as pd
 import statistics
 import signal
-from Amount_Sum import sum_yesterday_realized_pnl_at_midnight, save_daily_summary
+from Amount_Sum import sum_yesterday_realized_pnl_at_midnight, save_daily_summary,get_yesterday_total_amount_from_sqlite
 from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
@@ -1144,11 +1144,10 @@ if total!=0:
     notify_slack(f"昨日の総損益は {total} 円です")
     today_pnl=total
 else:
-    notify_slack("昨日の総損益データは見つかりませんでした")
-    save_daily_summary(SYMBOL,0) # データがない場合は0で初期化
-
-
-
+    total=get_yesterday_total_amount_from_sqlite(SYMBOL,mode=True)
+    if total!=None:
+        notify_slack(f"先週の最終損益は {total} 円です")
+    
 import asyncio
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo

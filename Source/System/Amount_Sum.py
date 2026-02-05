@@ -173,7 +173,7 @@ def save_daily_summary(SYMBOL,total_amount: Decimal) -> None:
     finally:
         conn.close()
 
-def get_yesterday_total_amount_from_sqlite(SYMBOL):
+def get_yesterday_total_amount_from_sqlite(SYMBOL,mode=False):
     """
     前日（JST）の total_amount だけ返す。
     無ければ None。
@@ -181,6 +181,12 @@ def get_yesterday_total_amount_from_sqlite(SYMBOL):
     """
     JST = ZoneInfo("Asia/Tokyo")
     yesterday = (datetime.now(JST).date() - timedelta(days=1)).isoformat()
+    if mode ==True:
+        today = datetime.now(JST).date()
+        # weekday(): 月曜=0, 火=1, 水=2, 木=3, 金=4, 土=5, 日=6
+        days_since_thursday = (today.weekday() - 3) % 7
+        last_thursday = today - timedelta(days=days_since_thursday)
+        yesterday = last_thursday.isoformat()
 
     conn = init_sqlite()
     try:
