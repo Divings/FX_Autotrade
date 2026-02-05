@@ -21,7 +21,7 @@ import statistics
 import pandas as pd
 import statistics
 import signal
-from Amount_Sum import sum_yesterday_realized_pnl_at_midnight, save_daily_summary,get_yesterday_total_amount_from_sqlite
+from Amount_Sum import sum_yesterday_realized_pnl_at_midnight, save_daily_summary
 from collections import deque
 import mysql.connector
 from conf_load import load_settings_from_db
@@ -807,14 +807,14 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             entry = float(pos["price"])
             size = int(pos["size"])
             side = pos.get("side", "BUY").upper()
-            MAX_HOLD = 300
+            MAX_HOLD = 420 # 300
             EXTENDABLE_LOSS = -10  # 許容する微損（円）
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             if elapsed > MAX_HOLD:
-                if shared_state.get("firsts")==True and USD_TIME==1:
-                    logging.info("延長 保有時間超過だが初動検知のためスキップ")
-                    return
+                # if shared_state.get("firsts")==True and USD_TIME==1:
+                #    logging.info("延長 保有時間超過だが初動検知のためスキップ")
+                #    return
                 if profit > EXTENDABLE_LOSS and shared_state.get("trend") == side:
                     logging.info("[延長] 保有時間超過だがトレンド継続中のため保持")
                     return  # 決済せず延長
