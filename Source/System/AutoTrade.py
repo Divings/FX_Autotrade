@@ -1128,7 +1128,7 @@ FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 today_pnl=0
 yesterday = (datetime.now(JST) - timedelta(days=1)).date()
 total,a= sum_yesterday_realized_pnl_at_midnight(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL,target_date=yesterday)
-if total==0:
+if total!=0:
     notify_slack(f"昨日の総損益は {total} 円です")
     today_pnl=total
 else:
