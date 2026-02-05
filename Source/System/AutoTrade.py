@@ -64,8 +64,8 @@ def load_conf_HOLD():
     # 設定ファイル読み込み
     config = configparser.ConfigParser()
     config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
-    HOLD = config.getint("HLD", "enable", fallback=1)# デフォルトは有効(1)
-    DATA = config.getint("HLD", "MAX_HOLD", fallback=420)# デフォルトは有効(1)
+    HOLD = config.getint("HOLD", "enable", fallback=1)# デフォルトは有効(1)
+    DATA = config.getint("HOLD", "MAX_HOLD", fallback=420)# デフォルトは有効(1)
     return HOLD,DATA
 
 
@@ -822,17 +822,19 @@ async def monitor_hold_status(shared_state, stop_event, interval_sec=1):
             profit = round((ask - entry if side == "BUY" else entry - bid) * LOT_SIZE, 2)
 
             if elapsed > MAX_HOLD:
-                if status == 0:
-                    logging.info("延長 保有時間超過だが保有スキップ設定無効のため保持")
-                    return
+                
                 if profit > EXTENDABLE_LOSS and shared_state.get("trend") == side:
                     logging.info("[延長] 保有時間超過だがトレンド継続中のため保持")
                     return  # 決済せず延長
                 else:
-                    notify_slack(f"注意! 保有時間が長すぎます\n 強制決済を発動します {profit}")
-                    rside = reverse_side(side)
-                    close_order(pid, size, rside)
-                    record_result(profit, shared_state)
+                    if status == 0:
+                        logging.info("延長 保有時間超過だが保有スキップ設定無効のため保持")
+                        return
+                    else:
+                        notify_slack(f"注意! 保有時間が長すぎます\n 強制決済を発動します {profit}")
+                        rside = reverse_side(side)
+                        close_order(pid, size, rside)
+                        record_result(profit, shared_state)
                 
             # 通知条件：利益または損失が±10円以上、かつ通知内容が前回と違うとき
             if abs(profit) > 10:
