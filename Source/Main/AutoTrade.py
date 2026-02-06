@@ -939,70 +939,221 @@ def load_config_from_mysql():
         return DEFAULT_CONFIG
 from Assets import get_positionLossGain
 
+import asyncio
+import time
+import logging
+from decimal import Decimal
+
+# USD/JPY前提: 0.01円 = 1pips、1000通貨で 1pips ≒ 10円
+def pnl_yen_from_prices(entry: float, bid: float, ask: float, side: str, units: int) -> float:
+    side = side.upper()
+    if side == "BUY":
+        diff = bid - entry       # BUYはBidで評価
+    else:
+        diff = entry - ask       # SELLはAskで評価
+    pips = diff / 0.01
+    yen = pips * 10 * (units / 1000)
+    return float(yen)
+
 # == 損益即時監視用タスク ==
 async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
-    SLIPPAGE_BUFFER = 5  # 許容スリッページ（円）
+    """
+    改善点:
+    - pos["lossGain"] を使わず bid/ask + entry から損益を自前計算（検知遅れ対策）
+    - get_price() を for内で連打しない（I/O削減）
+    - close_order を asyncio.to_thread で実行（監視タスクの詰まり対策）
+    - 同一pidの二重決済防止（closing_pids）
+    - prices None / key不足 を安全に処理
+    """
+
+    SLIPPAGE_BUFFER = 5  # 円（あなたの現状に合わせて維持）
+    # 損切りだけは多少スプレッド拡大でも通すなら、ここをMAX_SPREADより大きくする
+    # 例: MAX_SPREAD_STOP = MAX_SPREAD * 3
+    MAX_SPREAD_STOP = None  # Noneなら損切り時もMAX_SPREADを使う
+
+    # 二重決済防止セット
+    if "closing_pids" not in shared_state:
+        shared_state["closing_pids"] = set()
+
     while not stop_event.is_set():
-        positions = get_positions()
-        prices = get_price()
-        if prices is None:
+        try:
+            positions = get_positions()
+            prices = get_price()
+        except Exception as e:
+            logging.exception(f"[FAST] get_positions/get_price exception: {e}")
             await asyncio.sleep(interval_sec)
             continue
-        
+
+        if not prices or "ask" not in prices or "bid" not in prices:
+            await asyncio.sleep(interval_sec)
+            continue
+
         if not positions:
             await asyncio.sleep(interval_sec)
             continue
-        
-        ask = prices["ask"]
-        bid = prices["bid"]
+
+        ask = float(prices["ask"])
+        bid = float(prices["bid"])
+        spread = ask - bid
+
+        # 通常時スプレッドチェック（損切り発動してない通常ループでは弾いてOK）
+        # ※ あなたの運用思想に合わせて保持
+        if spread > MAX_SPREAD:
+            # ここで毎回Slack飛ばすと逆に重くなるので、必要なら間引き推奨
+            await asyncio.sleep(interval_sec)
+            continue
 
         for pos in positions:
-            entry = float(pos["price"])
-            pid = pos["positionId"]
-            size_str = int(pos["size"])
-            side = pos.get("side", "BUY").upper()
-            close_side = "SELL" if side == "BUY" else "BUY"
-
-            # スリッページバッファ込みで早めに判断
-            prices = get_price()
-            bid = prices["bid"]
-            ask = prices["ask"]
-
-            #mid = (ask + bid) / 2
-
-            spread = ask - bid
-            if spread > MAX_SPREAD:
-                notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
-                continue
-            
-            profit =  float(pos["lossGain"])
-                        
-            # 即時損切判定
-            if profit <= -MAX_LOSS + SLIPPAGE_BUFFER:
-                if spread > MAX_SPREAD:
-                    notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
+            try:
+                pid = pos["positionId"]
+                if pid in shared_state["closing_pids"]:
                     continue
-                notify_slack(f"[即時損切] 損失が {profit} 円（許容: -{MAX_LOSS}円 ±{SLIPPAGE_BUFFER}）→ 強制決済実行")
-                
-                start = time.time()
-                close_order(pid, size_str, close_side)
-                end = time.time()
-                record_result_block(profit, shared_state)
-                record_result(profit, shared_state)
-                write_log("LOSS_CUT_FAST", bid)
-                if shared_state.get("firsts")==True:
-                    shared_state["cooldown_untils"] = time.time() + MAX_Stop
-                    shared_state["firsts"] = False
-                # 遅延ログも記録
-                elapsed = end - start
-                if elapsed > 0.5:
-                    logging.warning(f"[遅延警告] 決済リクエストに {elapsed:.2f} 秒かかりました")
 
-                shared_state["trend"] = None
-                shared_state["last_trend"] = None
-                shared_state["entry_time"] = time.time()
-                
+                entry = float(pos["price"])
+                units = int(pos["size"])  # あなたの前提: 1000
+                side = (pos.get("side", "BUY") or "BUY").upper()
+                close_side = "SELL" if side == "BUY" else "BUY"
+
+                # lossGainではなく、自前損益で判定（ここが一番重要）
+                profit = pnl_yen_from_prices(entry, bid, ask, side, units)
+
+                # ここで「観測値」をログに残すと、遅延/ズレの検証が一発でできる
+                logging.warning(f"[FASTCHK] pid={pid} side={side} entry={entry} bid={bid} ask={ask} pnl={profit:.1f} spread={spread:.4f}")
+
+                # 即時損切り判定（バッファ込みで早めに判断）
+                if profit <= (-MAX_LOSS + SLIPPAGE_BUFFER):
+                    # 損切り時のスプレッド扱い（必要なら緩める）
+                    if MAX_SPREAD_STOP is None:
+                        # 既存のMAX_SPREADで判定（あなたの現在の思想に合わせる）
+                        if spread > MAX_SPREAD:
+                            notify_slack(
+                                "[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n"
+                                "損切タイミングに注意"
+                            )
+                            continue
+                    else:
+                        # 損切り時だけ許容を広げる運用（必要なら）
+                        if spread > MAX_SPREAD_STOP:
+                            notify_slack(
+                                f"[即時損切] 損失条件到達 {profit:.1f}円 だがスプレッド異常({spread:.4f})。\n"
+                                f"緊急決済を試行します。"
+                            )
+
+                    notify_slack(
+                        f"[即時損切] 損失が {profit:.1f} 円（許容: -{MAX_LOSS}円 ±{SLIPPAGE_BUFFER}）→ 強制決済実行"
+                    )
+
+                    shared_state["closing_pids"].add(pid)
+                    start = time.time()
+
+                    # close_orderがブロッキングならto_threadで逃がす
+                    try:
+                        await asyncio.to_thread(close_order, pid, units, close_side)
+                    except Exception as e:
+                        logging.exception(f"[FAST] close_order exception pid={pid}: {e}")
+                        # 決済失敗時は再試行できるように外す
+                        shared_state["closing_pids"].discard(pid)
+                        continue
+
+                    end = time.time()
+
+                    # 記録系（重いならここもto_thread化できる）
+                    try:
+                        record_result_block(profit, shared_state)
+                        record_result(profit, shared_state)
+                        write_log("LOSS_CUT_FAST", bid)
+                    except Exception as e:
+                        logging.exception(f"[FAST] record/log exception: {e}")
+
+                    # 初動フラグ周り（あなたの既存仕様を維持）
+                    if shared_state.get("firsts") == True:
+                        shared_state["cooldown_untils"] = time.time() + MAX_Stop
+                        shared_state["firsts"] = False
+
+                    elapsed = end - start
+                    if elapsed > 0.5:
+                        logging.warning(f"[遅延警告] 決済リクエストに {elapsed:.2f} 秒かかりました")
+
+                    shared_state["trend"] = None
+                    shared_state["last_trend"] = None
+                    shared_state["entry_time"] = time.time()
+
+                    # 決済完了したのでpid解放
+                    shared_state["closing_pids"].discard(pid)
+
+            except KeyError as e:
+                logging.warning(f"[FAST] position missing key: {e} pos={pos}")
+                continue
+            except Exception as e:
+                logging.exception(f"[FAST] loop exception: {e}")
+                continue
+
         await asyncio.sleep(interval_sec)
+
+
+
+
+# == 損益即時監視用タスク (旧型)==
+# async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
+#     SLIPPAGE_BUFFER = 5  # 許容スリッページ（円）
+#     while not stop_event.is_set():
+#         positions = get_positions()
+#         prices = get_price()
+#         if prices is None:
+#             await asyncio.sleep(interval_sec)
+#             continue
+        
+#         if not positions:
+#             await asyncio.sleep(interval_sec)
+#             continue
+        
+#         ask = prices["ask"]
+#         bid = prices["bid"]
+
+#         for pos in positions:
+#             entry = float(pos["price"])
+#             pid = pos["positionId"]
+#             size_str = int(pos["size"])
+#             side = pos.get("side", "BUY").upper()
+#             close_side = "SELL" if side == "BUY" else "BUY"
+
+#             # スリッページバッファ込みで早めに判断
+#             prices = get_price()
+#             bid = prices["bid"]
+#             ask = prices["ask"]
+
+#             #mid = (ask + bid) / 2
+
+#             spread = ask - bid
+            
+#             profit =  float(pos["lossGain"])
+                        
+#             # 即時損切判定
+#             if profit <= -MAX_LOSS + SLIPPAGE_BUFFER:
+#                 if spread > MAX_SPREAD:
+#                     notify_slack(f"[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n 損切タイミングに注意")
+#                     continue
+#                 notify_slack(f"[即時損切] 損失が {profit} 円（許容: -{MAX_LOSS}円 ±{SLIPPAGE_BUFFER}）→ 強制決済実行")
+                
+#                 start = time.time()
+#                 close_order(pid, size_str, close_side)
+#                 end = time.time()
+#                 record_result_block(profit, shared_state)
+#                 record_result(profit, shared_state)
+#                 write_log("LOSS_CUT_FAST", bid)
+#                 if shared_state.get("firsts")==True:
+#                     shared_state["cooldown_untils"] = time.time() + MAX_Stop
+#                     shared_state["firsts"] = False
+#                 # 遅延ログも記録
+#                 elapsed = end - start
+#                 if elapsed > 0.5:
+#                     logging.warning(f"[遅延警告] 決済リクエストに {elapsed:.2f} 秒かかりました")
+
+#                 shared_state["trend"] = None
+#                 shared_state["last_trend"] = None
+#                 shared_state["entry_time"] = time.time()
+                
+#         await asyncio.sleep(interval_sec)
 
 from load_xml import load_config_from_xml
 
