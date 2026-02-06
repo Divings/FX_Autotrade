@@ -2232,6 +2232,14 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         is_initial, direction = is_trend_initial(candles) # 初動検出関数の呼び出し
         if (direction=="BUY" or direction=="SELL"):
             trend = direction
+        if STOP_ENV == 1:
+            notify_slack(f"[停止] 利益確定ロック中のため新規注文停止")
+            logging.info(f"[停止] 利益確定ロック中のため新規注文停止")
+            continue
+        if STOP_ENV == 2:
+            notify_slack(f"[停止] 損失確定ロック中のため新規注文停止")
+            logging.info(f"[停止] 損失確定ロック中のため新規注文停止")
+            continue
         if is_initial:
             # 簡易フィルター
             positions = get_positions()
@@ -2260,12 +2268,6 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
 
                 # エントリー条件判定
                 if spread < MAX_SPREAD and adx >= 20 and rsi_ok:
-                    if STOP_ENV == 1:
-                        logging.info(f"[停止] 利益確定ロック中のため新規注文停止")
-                        continue
-                    if STOP_ENV == 2:
-                        logging.info(f"[停止] 損失確定ロック中のため新規注文停止")
-                        continue
                     logging.info(f"初動検出、方向: {direction} → エントリー")
                     notify_slack(f"初動検出、方向: {direction} → エントリー")
                     if testmode == 1:                        
