@@ -29,8 +29,8 @@ def _atomic_write_json(path: str, data: dict) -> None:
                 os.remove(tmp_path)
         except:
             pass
-
-def _read_json(path: str) -> dict | None:
+from typing import Optional, Dict, Tuple
+def _read_json(path: str) -> Optional[Dict]:
     if not os.path.exists(path):
         return None
     try:
@@ -54,7 +54,7 @@ def mark_stop_today(reason: int) -> None:
         "reason": int(reason),
     })
 
-def is_stopped_today() -> tuple[bool, int | None]:
+def is_stopped_today() -> Tuple[bool, Optional[int]]:
     """
     今日が停止日なら (True, reason) を返す。
     それ以外は (False, None)。
