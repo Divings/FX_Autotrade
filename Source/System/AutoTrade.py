@@ -1697,12 +1697,9 @@ def open_order(side="BUY"):
         return None
 
 from ENVJson import is_stopped_today,mark_stop_today
-ccx=0
 stopped, reason = is_stopped_today()
 if stopped:
-    if ccx==0:
-        notify_slack("[初期起動停止] 当日の損益ロックにより、新規注文を停止した状態で起動します")
-        ccx==1
+    notify_slack("[初期起動停止] 当日の損益ロックにより、新規注文を停止した状態で起動します")
     STOP_ENV = reason
 
 rootOrderIds = None
