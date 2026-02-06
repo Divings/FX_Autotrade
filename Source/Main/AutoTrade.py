@@ -252,7 +252,7 @@ def load_api_settings_sqlite(db_path="api_settings.db"):
 
 # ミッドナイトモード(Trueで有効化)
 night = True
-SYS_VER = "73.0.0"
+SYS_VER = "106.15.0"
 
 import numpy as np
 
@@ -1293,10 +1293,12 @@ if total!=0:
     notify_slack(f"昨日の総損益は {total} 円です")
     today_pnl=total
 else:
-    total=get_yesterday_total_amount_from_sqlite(SYMBOL,mode=True)
+    total=get_yesterday_total_amount_from_sqlite(SYMBOL,mode=False)
     if total!=None:
         notify_slack(f"先週の最終損益は {total} 円です")
-    
+    else:
+        notify_slack("昨日の総損益データが見つかりません")
+
 import asyncio
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
