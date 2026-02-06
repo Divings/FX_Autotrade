@@ -1696,6 +1696,15 @@ def open_order(side="BUY"):
         notify_slack(f"[注文] 新規建て失敗: {e}")
         return None
 
+from ENVJson import is_stopped_today,mark_stop_today
+ccx=0
+stopped, reason = is_stopped_today()
+if stopped:
+    if ccx==0:
+        notify_slack("[初期起動停止] 当日の損益ロックにより、新規注文を停止した状態で起動します")
+        ccx==1
+    STOP_ENV = reason
+
 rootOrderIds = None
 # === ポジション決済 ===
 def close_order(position_id, size, side):
@@ -1755,11 +1764,13 @@ def close_order(position_id, size, side):
         halt = profit_lock_check(API_KEY, API_SECRET, SYMBOL, YDAY_STOP)
         loss = loss_lock_check(API_KEY, API_SECRET, SYMBOL, YDAY_STOP)
         if loss == True:
-            notify_slack("[損失確定ロック] 当日の損失が前日を下回ったため、新規注文を停止します")
+            notify_slack("[損失確定ロック] 当日の損失が前日を上回ったため、新規注文を停止します")
             STOP_ENV = 2
         elif halt == True:
             notify_slack("[利益確定ロック] 当日の利益が前日を上回ったため、新規注文を停止します")
-            STOP_ENV = 1    
+            STOP_ENV = 1
+        if (STOP_ENV == 2 or STOP_ENV == 1):
+            mark_stop_today(STOP_ENV)
         return data
     except requests.exceptions.Timeout:
         notify_slack("[注文] タイムアウト（3秒）")
