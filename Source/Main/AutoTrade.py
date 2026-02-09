@@ -2024,6 +2024,9 @@ def load_news(v):
     NEWS_BLOCKS = load_news_blocks(TODAY)
     logging.info(f"[NEWS] loaded {len(NEWS_BLOCKS)} blocks for {TODAY}")
 
+# 利益/損失ロック時の環境変数
+STOP_NOTICS = 0
+
 # === トレンド判定を拡張（RSI+ADX込み） ===
 async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec=3, shared_state=None):
     import statistics
@@ -2032,6 +2035,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
     from datetime import date
     import time
     import logging
+    global STOP_NOTICS
     global first_start
     global candle_buffer
     global price_buffer
@@ -2143,6 +2147,7 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 values = failSafe(values)
                 m = 1
                 STOP_ENV = 0
+                STOP_NOTICS = 0
             continue
         else:
             m = 0
@@ -2410,12 +2415,16 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         if (direction=="BUY" or direction=="SELL"):
             trend = direction
         if STOP_ENV == 1:
-            notify_slack(f"[停止] 利益確定ロック中のため新規注文停止")
-            logging.info(f"[停止] 利益確定ロック中のため新規注文停止")
+            if STOP_NOTICS == 0:
+                notify_slack(f"[停止] 利益確定ロック中のため新規注文停止")
+                logging.info(f"[停止] 利益確定ロック中のため新規注文停止")
+                STOP_NOTICS = 1
             continue
         if STOP_ENV == 2:
-            notify_slack(f"[停止] 損失確定ロック中のため新規注文停止")
-            logging.info(f"[停止] 損失確定ロック中のため新規注文停止")
+            if STOP_NOTICS == 0:
+                notify_slack(f"[停止] 損失確定ロック中のため新規注文停止")
+                logging.info(f"[停止] 損失確定ロック中のため新規注文停止")
+                STOP_NOTICS = 1
             continue
         if is_initial:
             # 簡易フィルター
