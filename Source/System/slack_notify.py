@@ -62,14 +62,26 @@ config1 = load_settings_from_db()
 # Slack Webhook URL の復号
 _slack_enc = config1.get("SLACK_WEBHOOK_URL")
 
-# 復号処理
-if _slack_enc:
-    try:
-        SLACK_WEBHOOK_URL = aes_decrypt(_slack_enc)
-    except Exception as e:
-        raise RuntimeError("SLACK_WEBHOOK_URL の復号に失敗しました") from e
+def load_apifile_conf():
+    import configparser
+    
+    # 設定ファイル読み込み
+    config = configparser.ConfigParser()
+    config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
+    log_level = config.get("API", "SOURCE", fallback="file")# デフォルトは有効(1)
+    return log_level
+
+if load_apifile_conf()=="DB":
+    SLACK_WEBHOOK_URL = _slack_enc
 else:
-    SLACK_WEBHOOK_URL = None
+# 復号処理
+    if _slack_enc:
+        try:
+            SLACK_WEBHOOK_URL = aes_decrypt(_slack_enc)
+        except Exception as e:
+            raise RuntimeError("SLACK_WEBHOOK_URL の復号に失敗しました") from e
+    else:
+        SLACK_WEBHOOK_URL = None
 
 # Telegram トークン（必須）
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")

@@ -2,14 +2,20 @@ import mysql.connector
 from decimal import Decimal
 from datetime import date, timedelta
 from typing import Optional
+import os
+
+from dotenv import load_dotenv
+
+# .env読み込み
+load_dotenv()
 
 DB = dict(
-    host="127.0.0.1",
-    port=3306,
-    user="YOUR_USER",
-    password="YOUR_PASS",
-    database="YOUR_DB",
-)
+            host = os.getenv('DB_HOST'),
+            port = int(os.getenv('DB_PORT', 3306)),
+            user = os.getenv('DB_USER'),
+            password = os.getenv('DB_PASS'),
+            database = os.getenv('DB_NAME')
+        )
 
 def _to_decimal(v) -> Decimal:
     if v is None:
