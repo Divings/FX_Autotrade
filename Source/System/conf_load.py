@@ -9,24 +9,17 @@ load_dotenv()
 
 DB_PATH = Path("api_settings.db")
 
+def load_apifile_conf():
+    import configparser
+    
+    # 設定ファイル読み込み
+    config = configparser.ConfigParser()
+    config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
+    log_level = config.get("API", "SOURCE", fallback="file")# デフォルトは有効(1)
+    return log_level
+
 def load_settings_from_db():
     """DBからAPIキーなどの設定を読み込む（優先順位: SQLite → MySQL）"""
-    if DB_PATH.exists():
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("SELECT name, value FROM api_settings")
-            settings = {name: value for name, value in cursor.fetchall()}
-            cursor.close()
-            conn.close()
-            # print("✅ SQLite (api_settings.db) から設定を読み込みました。")
-            return settings
-        except sqlite3.Error as err:
-            print(f"[エラー] SQLite接続エラー: {err}")
-            # SQLiteに失敗したらMySQLにフォールバック
-            pass
-
-    # print("⚠ SQLiteが無いかエラーのため、MySQLから設定を読み込みます。")
     try:
         # 接続設定を.envから取得
         db_config = {

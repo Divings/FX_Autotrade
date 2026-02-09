@@ -176,6 +176,15 @@ def load_Auth_conf():
     log_level = config.getint("Auth", "enable", fallback=1)# デフォルトは有効(1)
     return log_level
 
+def load_apifile_conf():
+    import configparser
+    
+    # 設定ファイル読み込み
+    config = configparser.ConfigParser()
+    config.read("/opt/Innovations/System/config.ini", encoding="utf-8")
+    log_level = config.get("API", "SOURCE", fallback="file")# デフォルトは有効(1)
+    return log_level
+
 def load_Log_conf():
     import configparser
     # 設定ファイル読み込み
@@ -1159,6 +1168,7 @@ from load_xml import load_config_from_xml
 
 # 設定読み込み
 import os
+api_settings = load_apifile_conf()
 if os.path.exists("bot_config.xml"):
     config = load_config_from_xml("bot_config.xml")
     load_config_status="設定ソース:xml"
@@ -1266,12 +1276,16 @@ def handle_exit(signum, frame):
 conf=load_settings_from_db()
 URL_Auth = conf["URL"]
 
-if os.path.exists("api_settings.db"):
-    api_data,secret_data = load_api_settings_sqlite("api_settings.db")
-    Data_source = "APIデータソース:ローカルファイル"
+if api_settings=="file":
+    if os.path.exists("api_settings.db"):
+        api_data,secret_data = load_api_settings_sqlite("api_settings.db")
+        Data_source = "APIデータソース:ローカルファイル"
 else:
-    api_data, secret_data=load_api(temp_dir)
+    import conf_load
+    settings = conf_load.load_settings_from_db()
     Data_source="APIデータソース:データベース"
+    api_data = settings.get("API_KEY")
+    secret_data = settings.get("API_SECRET")
 
 save_dir = temp_dir +"/System_Status.txt"
 with open(save_dir, "w", encoding="utf-8") as f:
@@ -1284,7 +1298,6 @@ API_KEY = api_data.strip()
 API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
-
 
 today_pnl=0
 yesterday = (datetime.now(JST) - timedelta(days=1)).date()
