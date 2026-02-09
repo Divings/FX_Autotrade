@@ -18,7 +18,26 @@ def load_apifile_conf():
     log_level = config.get("API", "SOURCE", fallback="file")# デフォルトは有効(1)
     return log_level
 
+def load_settings_from_sqlite():
+    if DB_PATH.exists():
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, value FROM api_settings")
+            settings = {name: value for name, value in cursor.fetchall()}
+            cursor.close()
+            conn.close()
+            # print("✅ SQLite (api_settings.db) から設定を読み込みました。")
+            return settings
+        except sqlite3.Error as err:
+            print(f"[エラー] SQLite接続エラー: {err}")
+            # SQLiteに失敗したらMySQLにフォールバック
+            pass
+
 def load_settings_from_db():
+    if load_apifile_conf() == "file":
+        return load_settings_from_sqlite()
+
     """DBからAPIキーなどの設定を読み込む（優先順位: SQLite → MySQL）"""
     try:
         # 接続設定を.envから取得
