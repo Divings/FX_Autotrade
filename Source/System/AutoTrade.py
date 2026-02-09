@@ -1310,7 +1310,7 @@ if api_settings == "file":
 else:
     total = get_yesterday_pnl(default=Decimal("0"))
     pnl_int = int(total)
-    notify_slack(f"昨日の総損益は {total} 円です")
+    notify_slack(f"昨日の総損益は {pnl_int} 円です")
     today_pnl = total
 
 import asyncio
