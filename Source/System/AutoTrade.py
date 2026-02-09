@@ -2,6 +2,7 @@
 # 本ソフトウェアは 合同会社Anvelk Innovations のプロプライエタリライセンスに基づいて提供されています。
 # 本ソフトウェアの使用、複製、改変、再配布には 合同会社Anvelk Innovations の事前の書面による許可が必要です。
 
+from Amount_DB import upsert_daily_pnl,get_yesterday_pnl
 import news_block
 import os
 import hmac
@@ -1299,18 +1300,17 @@ API_SECRET = secret_data.strip()
 BASE_URL_FX = "https://forex-api.coin.z.com/private"
 FOREX_PUBLIC_API = "https://forex-api.coin.z.com/public"
 
-today_pnl=0
+today_pnl = 0
 yesterday = (datetime.now(JST) - timedelta(days=1)).date()
-total,a= sum_yesterday_realized_pnl_at_midnight(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL,target_date=yesterday)
-if total!=0:
+
+if api_settings == "file":
+    total,a = sum_yesterday_realized_pnl_at_midnight(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL,target_date=yesterday)
     notify_slack(f"昨日の総損益は {total} 円です")
-    today_pnl=total
+    today_pnl = total
 else:
-    total=get_yesterday_total_amount_from_sqlite(SYMBOL,mode=False)
-    if total!=None:
-        notify_slack(f"先週の最終損益は {total} 円です")
-    else:
-        notify_slack("昨日の総損益データが見つかりません")
+    total = get_yesterday_pnl(default=Decimal("0"))
+    notify_slack(f"昨日の総損益は {total} 円です")
+    today_pnl = total
 
 import asyncio
 from datetime import datetime, timedelta
@@ -2136,6 +2136,9 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
                 yesterday = (datetime.now(JST) - timedelta(days=1)).date()
                 total,a = sum_yesterday_realized_pnl_at_midnight(api_key=API_KEY,secret_key=API_SECRET,symbol=SYMBOL,target_date=yesterday)
                 save_daily_summary(SYMBOL,total)
+                today = date.today()
+                
+                upsert_daily_pnl(today,total)
                 notify_slack(f" 取引抑止時刻になりました、取引を中断します。\n 本日の累計損益は{total}円です。")
                 values = failSafe(values)
                 m = 1
