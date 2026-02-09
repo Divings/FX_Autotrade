@@ -1309,6 +1309,7 @@ if api_settings == "file":
     today_pnl = total
 else:
     total = get_yesterday_pnl(default=Decimal("0"))
+    pnl_int = int(total)
     notify_slack(f"昨日の総損益は {total} 円です")
     today_pnl = total
 
