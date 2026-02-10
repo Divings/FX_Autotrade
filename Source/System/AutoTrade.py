@@ -1348,7 +1348,7 @@ def loss_lock_check(api_key, secret_key, symbol, n_yen):
     )
 
     # 昨日比で -n円以上悪化したら True（= 日次負け停止）
-    return today_pnl <= (y_pnl - Decimal(n_yen))
+    return today_pnl <= -Decimal(n_yen)
 
 
 # === 取引余力確認と初期残高保存 ===
