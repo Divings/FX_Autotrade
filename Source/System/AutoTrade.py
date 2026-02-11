@@ -1006,13 +1006,6 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
         bid = float(prices["bid"])
         spread = ask - bid
 
-        # 通常時スプレッドチェック（損切り発動してない通常ループでは弾いてOK）
-        # ※ あなたの運用思想に合わせて保持
-        if spread > MAX_SPREAD:
-            # ここで毎回Slack飛ばすと逆に重くなるので、必要なら間引き推奨
-            await asyncio.sleep(interval_sec)
-            continue
-
         for pos in positions:
             try:
                 pid = pos["positionId"]
@@ -1035,12 +1028,7 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
                     # 損切り時のスプレッド扱い（必要なら緩める）
                     if MAX_SPREAD_STOP is None:
                         # 既存のMAX_SPREADで判定（あなたの現在の思想に合わせる）
-                        if spread > MAX_SPREAD:
-                            notify_slack(
-                                "[即時損切保留] 強制決済実行の条件に達したが、スプレッドが拡大中なのでスキップ\n"
-                                "損切タイミングに注意"
-                            )
-                            continue
+                        pass
                     else:
                         # 損切り時だけ許容を広げる運用（必要なら）
                         if spread > MAX_SPREAD_STOP:
@@ -1099,9 +1087,6 @@ async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
                 continue
 
         await asyncio.sleep(interval_sec)
-
-
-
 
 # == 損益即時監視用タスク (旧型)==
 # async def monitor_positions_fast(shared_state, stop_event, interval_sec=0.2):
@@ -2358,7 +2343,8 @@ async def monitor_trend(stop_event, short_period=6, long_period=13, interval_sec
         candles = build_last_2_candles_from_prices(list(price_buffer))
         logging.info(f"[INFO] キャンドルデータ2本分 {candles}")
         range_value = calculate_range(price_buffer, period=10)
-        logging.info(f"[INFO] 直近10本の価格レンジ: {range_value:.5f}")
+        if range_value is not None:
+            logging.info(f"[INFO] 直近10本の価格レンジ: {range_value:.5f}")
         
         if load_conf_FILTER()==1: # 動的フィルタリング有効
                 if is_sideways_sma(close_prices):
